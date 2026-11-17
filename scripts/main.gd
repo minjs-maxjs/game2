@@ -7,7 +7,7 @@ const Monster = preload("res://scripts/monster.gd")
 
 const WORLD_SIZE := Vector2(640, 360)
 const DAY_LENGTH := 45.0
-const HALL_MAX_HP := 300.0
+const HALL_MAX_HP := 400.0
 const RECRUIT_COST := 60
 const WAGE_PER_MERC := 5
 const MAX_MERCS := 10
@@ -62,8 +62,9 @@ func _ready() -> void:
 	modulate_node = CanvasModulate.new()
 	add_child(modulate_node)
 	_build_hud()
-	for i in START_MERCS:
-		_spawn_merc()
+	# 시작 편성은 고정: 전사 2, 궁수 1, 사제 1. 이후 모집은 무작위.
+	for job in [0, 1, 2, 0]:
+		_spawn_merc(job)
 	add_log("세계의 끝 영지에 도착했다. 균열의 기운이 짙다.")
 	_show_banner("아그라 전기 — 1일째 아침")
 
@@ -132,12 +133,15 @@ func _update_lighting(delta: float) -> void:
 
 # ------------------------------------------------------------------ 생성/전투
 
-func _spawn_merc() -> void:
+func _spawn_merc(forced_job: int = -1) -> void:
 	var m: Mercenary = Mercenary.new()
 	m.game = self
 	m.position = building_pos("plaza")
 	add_child(m)
-	m.randomize_identity(rng)
+	var taken: Array[String] = []
+	for other in mercs:
+		taken.append(other.merc_name)
+	m.randomize_identity(rng, forced_job, taken)
 	if not mercs.is_empty():
 		m.friend = mercs[rng.randi() % mercs.size()]
 	mercs.append(m)

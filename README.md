@@ -21,6 +21,16 @@
 | SPACE | 배속 전환 |
 | R | 패배 후 다시 시작 |
 
+## 헤드리스 스모크 테스트
+
+며칠을 10배속으로 자동 진행하며 오류와 기본 흐름(밤 침공, 날짜 진행)을 확인한다.
+
+```
+godot --headless --path . --fixed-fps 60 --script res://tests/smoke_test.gd
+```
+
+`RESULT PASS`와 종료 코드 0이면 정상이다.
+
 ## 구조
 
 ```

@@ -48,9 +48,15 @@ var bob := 0.0
 var rally_offset := Vector2.ZERO
 
 
-func randomize_identity(rng: RandomNumberGenerator) -> void:
-	merc_name = NAMES[rng.randi() % NAMES.size()]
-	job = rng.randi() % 3
+func randomize_identity(rng: RandomNumberGenerator, forced_job: int = -1, taken: Array[String] = []) -> void:
+	var free_names: Array = []
+	for n in NAMES:
+		if not taken.has(n):
+			free_names.append(n)
+	if free_names.is_empty():
+		free_names = NAMES.duplicate()
+	merc_name = free_names[rng.randi() % free_names.size()]
+	job = forced_job if forced_job >= 0 else rng.randi() % 3
 	for group in TRAIT_GROUPS:
 		var t: String = group[rng.randi() % group.size()]
 		if t != "":
@@ -159,8 +165,8 @@ func _choose_action() -> void:
 		"rest": (100.0 - energy) * (1.6 if lazy else 1.0) + (15.0 if lazy else 0.0),
 		"eat": hunger * 1.3 if game.food >= 1.0 else hunger * 0.3,
 		"train": (25.0 + (40.0 if diligent else 0.0)) * e,
-		"work_farm": (20.0 + (25.0 if diligent else 0.0) + (25.0 if game.food < 15.0 else 0.0)) * e,
-		"work_wood": (18.0 + (20.0 if diligent else 0.0)) * e,
+		"work_farm": (30.0 + (25.0 if diligent else 0.0) + (25.0 if game.food < 15.0 else 0.0)) * e,
+		"work_wood": (30.0 + (20.0 if diligent else 0.0) + (20.0 if game.wood < 30.0 else 0.0)) * e,
 		"chat": 15.0 + (100.0 - morale) * 0.4,
 	}
 	var best := "chat"
