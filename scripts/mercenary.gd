@@ -50,6 +50,9 @@ var facing := 1.0
 var moving := false
 var bob := 0.0
 var rally_offset := Vector2.ZERO
+var path := PackedVector2Array()
+var path_goal := Vector2(INF, INF)
+var repath_cd := 0.0
 
 
 func randomize_identity(rng: RandomNumberGenerator, forced_job: int = -1, taken: Array[String] = []) -> void:
@@ -311,10 +314,27 @@ func on_dawn() -> void:
 
 func _move_to(p: Vector2, delta: float) -> void:
 	var spd := move_speed * (0.6 if energy < 20.0 else 1.0)
-	if absf(p.x - position.x) > 0.5:
-		facing = signf(p.x - position.x)
-	position = position.move_toward(p, spd * delta)
+	_follow(p, spd * delta, delta)
 	moving = true
+
+## 경로를 따라 p로 이동한다. 목표가 크게 바뀌면 0.4초 간격으로 다시 길을 찾는다.
+func _follow(p: Vector2, step: float, delta: float) -> void:
+	repath_cd -= delta
+	var far := position.distance_to(p) > 20.0
+	if repath_cd <= 0.0 and (path_goal.distance_to(p) > 12.0 or (path.is_empty() and far)):
+		path = game.find_path(position, p)
+		path_goal = p
+		repath_cd = 0.4
+	while path.size() > 0 and position.distance_to(path[0]) < 1.5:
+		path.remove_at(0)
+	var next := p
+	if path.size() > 0:
+		next = path[0]
+	elif not game.is_walkable(p) and game.is_walkable(position):
+		return
+	if absf(next.x - position.x) > 0.5:
+		facing = signf(next.x - position.x)
+	position = position.move_toward(next, step)
 
 
 # ------------------------------------------------------------------ 그리기

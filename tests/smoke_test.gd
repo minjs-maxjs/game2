@@ -11,6 +11,8 @@ var saw_night := false
 var max_monsters := 0
 var kills_seen := 0
 var prev_monsters := 0
+var blocked_hits := 0
+var unit_frames := 0
 
 
 func _initialize() -> void:
@@ -29,13 +31,22 @@ func _process(_delta: float) -> bool:
 			main._on_recruit()
 		if main.wood >= 20 and main.hall_hp < main.HALL_MAX_HP - 80:
 			main._on_repair()
+	# 건물·나무 안에 서 있는 유닛 수 (길찾기 검증)
+	for u in main.mercs + main.monsters:
+		if is_instance_valid(u):
+			unit_frames += 1
+			if not main.is_walkable(u.position):
+				blocked_hits += 1
 	var n: int = main.monsters.size()
 	max_monsters = maxi(max_monsters, n)
 	if frames % 600 == 0:
 		_report()
 	if main.day >= TARGET_DAY or main.game_over or frames >= MAX_FRAMES:
 		_report()
-		var ok: bool = main.mercs.size() >= 4 and saw_night and max_monsters > 0 and main.day >= 2
+		var blocked_ratio := float(blocked_hits) / maxf(1.0, float(unit_frames))
+		print("blocked unit-frames: %d / %d (%.2f%%)" % [blocked_hits, unit_frames, blocked_ratio * 100.0])
+		var ok: bool = main.mercs.size() >= 4 and saw_night and max_monsters > 0 and main.day >= 2 and blocked_ratio < 0.01 \
+			and not main.is_walkable(main.buildings["hall"]["pos"]) and not main.is_walkable(main.buildings["inn"]["pos"])
 		print("RESULT %s  day=%d game_over=%s max_monsters=%d frames=%d" % [
 			"PASS" if ok else "FAIL", main.day, main.game_over, max_monsters, frames])
 		quit(0 if ok else 1)

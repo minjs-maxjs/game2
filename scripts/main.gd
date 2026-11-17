@@ -45,7 +45,7 @@ var buildings: Dictionary = {
 	"mess": {"name": "식당", "pos": Vector2(392, 88), "spot": Vector2(392, 124), "spread": Vector2(18, 4), "label": Vector2(392, 58)},
 	"training": {"name": "훈련장", "pos": Vector2(152, 240), "spot": Vector2(152, 266), "spread": Vector2(30, 3), "label": Vector2(152, 220)},
 	"farm": {"name": "밭", "pos": Vector2(408, 232), "spot": Vector2(408, 236), "spread": Vector2(30, 10), "label": Vector2(408, 204)},
-	"forest": {"name": "숲", "pos": Vector2(48, 80), "spot": Vector2(56, 126), "spread": Vector2(36, 3), "label": Vector2(104, 40)},
+	"forest": {"name": "숲", "pos": Vector2(48, 80), "spot": Vector2(56, 136), "spread": Vector2(36, 3), "label": Vector2(104, 40)},
 	"plaza": {"name": "광장", "pos": Vector2(280, 104), "spot": Vector2(280, 108), "spread": Vector2(22, 10), "label": Vector2(280, 76)},
 }
 var hall_rect := Rect2(224, 160, 96, 48)
@@ -57,6 +57,7 @@ var log_lines: Array[String] = []
 
 var rng := RandomNumberGenerator.new()
 var dungeon_tex: Texture2D = DUNGEON_TEX
+var nav := AStarGrid2D.new()
 var static_tex: ImageTexture
 var font_s: FontFile
 var font_m: FontFile
@@ -205,7 +206,45 @@ func building_pos(key: String) -> Vector2:
 	var b: Dictionary = buildings[key]
 	var p: Vector2 = b["spot"]
 	var s: Vector2 = b["spread"]
-	return (p + Vector2(rng.randf_range(-s.x, s.x), rng.randf_range(-s.y, s.y))).round()
+	for i in 12:
+		var c := (p + Vector2(rng.randf_range(-s.x, s.x), rng.randf_range(-s.y, s.y))).round()
+		if is_walkable(c):
+			return c
+	return p
+
+
+# ------------------------------------------------------------------ 길찾기
+## 16px 격자 A*. 길(징검돌) 비용 1, 잔디·흙 비용 3 → 용병은 되도록 길로 다닌다.
+
+func _build_nav(roads: Array[Vector2i], blocked: Array[Vector2i]) -> void:
+	nav.region = Rect2i(0, 0, 40, 23)
+	nav.cell_size = Vector2(TILE, TILE)
+	nav.offset = Vector2(TILE / 2.0, TILE / 2.0)
+	nav.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	nav.default_compute_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+	nav.default_estimate_heuristic = AStarGrid2D.HEURISTIC_OCTILE
+	nav.update()
+	nav.fill_weight_scale_region(nav.region, 3.0)
+	for c in roads:
+		nav.set_point_weight_scale(c, 1.0)
+	for c in blocked:
+		nav.set_point_solid(c, true)
+
+
+func cell_of(p: Vector2) -> Vector2i:
+	return Vector2i(clampi(int(p.x / TILE), 0, 39), clampi(int(p.y / TILE), 0, 22))
+
+
+func is_walkable(p: Vector2) -> bool:
+	return not nav.is_point_solid(cell_of(p))
+
+
+## 목적지가 막혀 있으면 가장 가까운 칸까지의 경로를 돌려준다. 첫 점(현재 칸)은 뺀다.
+func find_path(from: Vector2, to: Vector2) -> PackedVector2Array:
+	var pts := nav.get_point_path(cell_of(from), cell_of(to), true)
+	if pts.size() > 0:
+		pts.remove_at(0)
+	return pts
 
 
 # ------------------------------------------------------------------ 입력
@@ -455,6 +494,7 @@ func _compose_static() -> void:
 			_stamp(img, src, 2 if roll < 0.05 else (1 if roll < 0.2 else 0), tx, ty)
 	# 길 (징검돌)
 	var path: Array[Vector2i] = []
+	var blocked: Array[Vector2i] = []
 	for x in range(1, 27):
 		path.append(Vector2i(x, 8))
 	for x in range(12, 22):
@@ -475,12 +515,21 @@ func _compose_static() -> void:
 		for x in range(16, 19):
 			_stamp(img, src, 43, x, y)
 	_stamp(img, src, 104, 17, 6)
+	blocked.append(Vector2i(17, 6))
 	# 밭
 	_stamp_block(img, src, [[12, 13, 13, 13, 14], [24, 25, 25, 25, 26], [36, 37, 37, 37, 38]], 23, 13)
 	for x in range(24, 27):
 		_stamp(img, src, 17, x, 14)
 	_stamp(img, src, 94, 29, 13)
 	_stamp(img, src, 94, 29, 15)
+	blocked.append_array([Vector2i(29, 13), Vector2i(29, 15), Vector2i(26, 6), Vector2i(6, 15),
+		Vector2i(8, 15), Vector2i(10, 15)])
+	for x in range(7, 12):
+		blocked.append(Vector2i(x, 14))
+	for r in [Rect2i(8, 4, 3, 3), Rect2i(23, 4, 3, 3), Rect2i(14, 10, 6, 3)]:
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				blocked.append(Vector2i(x, y))
 	# 건물
 	_stamp_block(img, src, [[52, 53, 54], [64, 67, 66], [88, 89, 91]], 8, 4)    # 여관
 	_stamp_block(img, src, [[48, 49, 50], [60, 63, 62], [84, 85, 87]], 23, 4)   # 식당
@@ -501,11 +550,14 @@ func _compose_static() -> void:
 			if h.randf() < 0.15:
 				continue
 			_stamp(img, src, trees[h.randi() % trees.size()], tx, ty)
+			blocked.append(Vector2i(tx, ty))
 	# 가장자리 나무
 	for p in [Vector2i(32, 9), Vector2i(31, 16), Vector2i(4, 11), Vector2i(2, 14), Vector2i(19, 16),
 			Vector2i(13, 2), Vector2i(29, 3), Vector2i(21, 3), Vector2i(33, 12), Vector2i(15, 16)]:
 		_stamp(img, src, [16, 28, 15, 27, 5][h.randi() % 5], p.x, p.y)
+		blocked.append(p)
 	static_tex = ImageTexture.create_from_image(img)
+	_build_nav(path, blocked)
 
 
 func _draw() -> void:
