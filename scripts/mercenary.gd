@@ -4,7 +4,9 @@ extends Node2D
 ## 밤에는 성격·직업·집결 지점에 따라 싸운다.
 
 const JOB_NAMES := ["전사", "궁수", "사제"]
-var JOB_COLORS := [Color("d84a3a"), Color("3a8fd8"), Color("e8e0c8")]
+## Kenney Tiny Dungeon 타일 번호: 직업별 외형 후보
+const JOB_SPRITES := [[96, 97, 87, 98], [112, 88, 85], [84, 100, 111]]
+const JOB_BADGE := [Color("d84a3a"), Color("3fae5a"), Color("7fd6ff")]
 const NAMES := ["로웬", "카일", "미르", "세라", "브란", "테오", "리나", "도건",
 	"하엘", "유나", "오린", "베스", "가람", "솔", "에단", "마루", "이든", "펠"]
 ## 같은 묶음 안의 특성은 함께 가질 수 없다. 빈 문자열은 '특성 없음'.
@@ -43,7 +45,9 @@ var attack_cd := 0.0
 var flash_to := Vector2.ZERO
 var flash_t := 0.0
 var flash_color := Color.YELLOW
-var hair_color := Color(0.4, 0.25, 0.1)
+var sprite_index := 96
+var facing := 1.0
+var moving := false
 var bob := 0.0
 var rally_offset := Vector2.ZERO
 
@@ -73,7 +77,8 @@ func randomize_identity(rng: RandomNumberGenerator, forced_job: int = -1, taken:
 	if has_trait("용맹"):
 		atk *= 1.15
 	hp = max_hp
-	hair_color = Color.from_hsv(rng.randf(), 0.55, 0.55)
+	var options: Array = JOB_SPRITES[job]
+	sprite_index = options[rng.randi() % options.size()]
 	rally_offset = Vector2(rng.randf_range(-18, 18), rng.randf_range(-12, 12))
 	target_pos = position
 
@@ -106,6 +111,7 @@ func _process(delta: float) -> void:
 	bob += delta * 8.0
 	attack_cd = maxf(0.0, attack_cd - delta)
 	flash_t = maxf(0.0, flash_t - delta)
+	moving = false
 	if downed:
 		activity = "쓰러짐"
 	elif game.is_night:
@@ -193,7 +199,7 @@ func _night(delta: float) -> void:
 		flee_ratio = 0.1
 	if hp < max_hp * flee_ratio:
 		activity = "후퇴"
-		var safe: Vector2 = game.buildings["inn"]["pos"]
+		var safe: Vector2 = game.buildings["inn"]["spot"]
 		if position.distance_to(safe) > 6.0:
 			_move_to(safe, delta)
 		else:
@@ -203,7 +209,7 @@ func _night(delta: float) -> void:
 		return
 	var target = _pick_target()
 	if target == null:
-		var guard: Vector2 = game.rally_point if game.has_rally else game.buildings["hall"]["pos"] + Vector2(0, 28)
+		var guard: Vector2 = game.rally_point if game.has_rally else game.buildings["hall"]["spot"]
 		activity = "집결" if game.has_rally else "경계"
 		if position.distance_to(guard + rally_offset) > 4.0:
 			_move_to(guard + rally_offset, delta)
@@ -305,39 +311,42 @@ func on_dawn() -> void:
 
 func _move_to(p: Vector2, delta: float) -> void:
 	var spd := move_speed * (0.6 if energy < 20.0 else 1.0)
+	if absf(p.x - position.x) > 0.5:
+		facing = signf(p.x - position.x)
 	position = position.move_toward(p, spd * delta)
+	moving = true
 
 
 # ------------------------------------------------------------------ 그리기
+## 원점 = 발밑. 스프라이트는 16x16 (Kenney Tiny Dungeon).
 
 func _draw() -> void:
-	var body: Color = JOB_COLORS[job]
+	var tex: Texture2D = game.dungeon_tex
+	var src := Rect2(game.tile_src(sprite_index))
 	if downed:
-		draw_rect(Rect2(-6, -1, 12, 4), body.darkened(0.4))
-		draw_rect(Rect2(-9, -1, 4, 4), Color("f2c9a0").darkened(0.3))
+		draw_set_transform(Vector2(0, -4), PI / 2.0, Vector2.ONE)
+		draw_texture_rect_region(tex, Rect2(-8, -8, 16, 16), src, Color(0.55, 0.45, 0.45))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		return
-	var y := floorf(sin(bob) * 0.8)
-	draw_rect(Rect2(-4, 4, 8, 2), Color(0, 0, 0, 0.3))
-	draw_rect(Rect2(-3, -3 + y, 6, 7), body)
-	draw_rect(Rect2(-3, -9 + y, 6, 6), Color("f2c9a0"))
-	draw_rect(Rect2(-3, -10 + y, 6, 2), hair_color)
-	draw_rect(Rect2(-1, -7 + y, 1, 1), Color.BLACK)
-	draw_rect(Rect2(1, -7 + y, 1, 1), Color.BLACK)
-	match job:
-		0:
-			draw_rect(Rect2(4, -8 + y, 1, 9), Color("d0d6dc"))
-			draw_rect(Rect2(3, -1 + y, 3, 1), Color("7a5230"))
-		1:
-			draw_arc(Vector2(4, -2 + y), 5.0, -PI / 2.0, PI / 2.0, 6, Color("7a5230"), 1.0)
-		2:
-			draw_rect(Rect2(4, -9 + y, 1, 11), Color("7a5230"))
-			draw_rect(Rect2(3, -11 + y, 3, 3), Color("7fe0ff"))
-	if game != null and game.selected == self:
-		draw_rect(Rect2(-6, -12, 12, 18), Color(1, 1, 0.4), false, 1.0)
+	var hop := -1.0 if moving and int(bob) % 2 == 0 else 0.0
+	draw_rect(Rect2(-5, -1, 10, 2), Color(0, 0, 0, 0.25))
+	draw_set_transform(Vector2(0, hop), 0.0, Vector2(facing, 1.0))
+	draw_texture_rect_region(tex, Rect2(-8, -16, 16, 16), src)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# 직업 표식 (발밑 점)
+	draw_rect(Rect2(-1, 1, 2, 1), JOB_BADGE[job])
+	if game.selected == self:
+		draw_rect(Rect2(-9, -18, 18, 20), Color(1, 0.95, 0.4), false, 1.0)
 	if hp < max_hp:
-		draw_rect(Rect2(-5, -14, 10, 1.5), Color(0.1, 0.1, 0.1))
-		draw_rect(Rect2(-5, -14, 10.0 * hp / max_hp, 1.5), Color("5ad05a"))
+		draw_rect(Rect2(-6, -20, 12, 2), Color(0.1, 0.1, 0.1))
+		draw_rect(Rect2(-6, -20, floorf(12.0 * hp / max_hp), 2), Color("5ad05a"))
 	if flash_t > 0.0:
-		draw_line(Vector2(0, -3), flash_to, flash_color, 1.0)
-	draw_string(ThemeDB.fallback_font, Vector2(-24, -16), activity,
-		HORIZONTAL_ALIGNMENT_CENTER, 48, 6, Color(1, 1, 1, 0.85))
+		draw_line(Vector2(0, -8), flash_to + Vector2(0, -6), flash_color, 1.0)
+	# 행동 이름은 선택했을 때만, 위급 상태는 항상 표시 (겹침 방지)
+	if game.selected != self and not (activity in ["후퇴", "친구 구출", "배고픔", "치유"]):
+		return
+	var f: Font = game.font_s
+	var w := f.get_string_size(activity, HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x
+	var tp := Vector2(floorf(-w / 2.0), -22)
+	draw_string_outline(f, tp, activity, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, 2, Color(0, 0, 0, 0.8))
+	draw_string(f, tp, activity, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(1, 1, 1, 0.9))

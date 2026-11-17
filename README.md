@@ -5,6 +5,10 @@
 세계의 끝 영지의 영주가 되어 마을을 꾸리고 용병을 모아, 밤마다 균열에서 쏟아지는 마물을 막아낸다.
 용병들은 직접 조종하는 유닛이 아니다. 각자 성격과 욕구에 따라 살고 싸운다.
 
+| 낮 | 밤 |
+|---|---|
+| ![낮](docs/screenshots/day.png) | ![밤](docs/screenshots/night.png) |
+
 ## 실행
 
 1. [Godot 4.3+](https://godotengine.org/download)를 설치한다 (Standard 버전이면 된다).
@@ -42,4 +46,13 @@ scripts/monster.gd     균열 마물
 docs/기획서_v0.3.md     게임 기획서
 ```
 
-현재 그래픽은 모두 코드로 그린 임시 픽셀 도형이다. 정식 스프라이트는 다음 단계에서 넣는다.
+화면 캡처: `godot --path . --script res://tests/screenshot.gd -- <출력폴더>` (창이 잠깐 뜬다)
+
+## 에셋 출처
+
+| 에셋 | 제작 | 라이선스 |
+|---|---|---|
+| Tiny Town, Tiny Dungeon (`assets/kenney_*`) | Kenney (kenney.nl) | CC0 |
+| 갈무리 Galmuri7/9/11 (`assets/fonts`) | 이민서 (quiple) | SIL OFL 1.1 |
+
+정식 아트로 바꿀 때는 `assets/`의 타일시트를 같은 16×16 격자로 교체하면 된다.
