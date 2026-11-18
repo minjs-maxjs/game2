@@ -164,9 +164,13 @@ func _process(_delta: float) -> bool:
 	main.is_night = false
 	main.select(km)
 	var spot: Vector2 = main.buildings["hall"]["spot"] + Vector2(53, 5)
-	check(dep.handle_click(spot, null) and km.post_pos == main.cell_of(spot), "맵 클릭으로 배치 (칸 %s)" % [km.post_pos])
+	# 고르면 육성 창이 맵 오른쪽을 가린다 → 그 자리는 창이 클릭을 받는다
+	check(dep.handle_click(spot, null) and km.post_pos == null, "육성 창이 가린 곳은 배치 거부")
+	main.toggle_hud()
+	check(dep.handle_click(spot, null) and km.post_pos == main.cell_of(spot), "HUD를 숨기면 그 자리에 배치 (칸 %s)" % [km.post_pos])
+	main.toggle_hud()
 	var cell = km.post_pos
-	check(dep.handle_click(Vector2(100, 10), null) and km.post_pos == cell, "HUD 띠는 배치 거부")
+	check(dep.handle_click(Vector2(100, 10), null) and km.post_pos == cell, "HUD 윗줄(보일 때)은 배치 거부")
 	check(dep.handle_click(main.buildings["hall"]["pos"], null) and km.post_pos == cell, "건물(막힌 칸)은 배치 거부")
 	check(dep.handle_click(km.position, km) and km.post_pos == null, "같은 쪼꼬미를 다시 누르면 배치 해제")
 
@@ -228,6 +232,74 @@ func _process(_delta: float) -> bool:
 			back = minf(back, dd)
 	check(all_ok and cells.size() == main.mercs.size(), "자동 배치: %d명 모두 서로 다른 빈 칸" % main.mercs.size())
 	check(front > back, "자동 배치: 전열이 후열보다 앞 (전열 %.0f · 후열 %.0f)" % [front, back])
+
+	# 13) (c) 우상단: 오른쪽 메뉴 버튼 밑 칸은 HUD가 보이면 거부, 숨기면 배치. 메뉴 아래 빈 곳은 그냥 배치
+	main.select(km)
+	var tr_cell: Vector2i = dep._free_cell(Vector2(596, 44), {})
+	var tr: Vector2 = dep.cell_center(tr_cell)
+	km.post_pos = null
+	check(dep.ui_blocks(tr) and dep.handle_click(tr, null) and km.post_pos == null, "우상단 메뉴 버튼 위는 거부 (%s)" % tr)
+	main.toggle_hud()
+	check(dep.handle_click(tr, null) and km.post_pos == tr_cell, "HUD를 숨기면 우상단 %s 배치" % tr_cell)
+	main.toggle_hud()
+	var free_tr: Vector2 = dep.cell_center(dep._free_cell(Vector2(600, 200), {}))
+	check(not dep.ui_blocks(free_tr) and dep.handle_click(free_tr, null) and km.post_pos == main.cell_of(free_tr), "메뉴 아래 빈 곳 %s 은 HUD가 보여도 배치" % free_tr)
+
+	# 14) (b) 밤에도 배치: 지정하면 그 칸으로 길을 찾아 간다. 고르는 동안 시간은 0.2배, 배속은 끝나면 복구
+	main.is_night = true
+	main.monsters.clear()
+	var night_post: Vector2 = dep.cell_center(dep._free_cell(Vector2(120, 190), {}))
+	check(dep.handle_click(night_post, null) and km.post_pos == main.cell_of(night_post), "밤에 배치 지정 성공")
+	var d0: float = km.position.distance_to(night_post)
+	for i in 240:
+		km._night(1.0 / 60.0)
+	check(km.position.distance_to(night_post) < d0 - 30.0, "밤 배치 칸으로 이동 (%.0f → %.0f)" % [d0, km.position.distance_to(night_post)])
+	Engine.time_scale = 1.0
+	dep._update_slow()
+	check(is_equal_approx(Engine.time_scale, dep.NIGHT_EDIT_SPEED), "밤에 고르는 동안 0.2배속")
+	main._on_speed()
+	check(is_equal_approx(Engine.time_scale, dep.NIGHT_EDIT_SPEED) and is_equal_approx(dep.base_speed(), 2.0), "느린 동안 배속 버튼은 돌아갈 배속만 바꾼다")
+	main.select(null)
+	dep._update_slow()
+	check(is_equal_approx(Engine.time_scale, 2.0), "선택을 풀면 고른 배속(x2)으로 복구")
+	main._on_speed()
+	Engine.time_scale = 1.0
+
+	# 15) (a) 성 위기: 영주관 옆 마물 → 멀리 배치된 쪼꼬미가 떠나 접근, 위기가 끝나면 복귀
+	km.post_pos = main.cell_of(night_post)
+	km.position = night_post
+	km.hp = km.max_hp
+	km.defending = false
+	km.mode_lock = 0.0
+	var raider = preload("res://scripts/monster.gd").new()
+	raider.game = main
+	raider.hp = 99999.0
+	main.add_child(raider)
+	main.monsters.append(raider)
+	raider.position = Vector2(272, 214)   # 영주관 바로 아래
+	dep.last_hall_hit = -999.0
+	var gap0: float = km.position.distance_to(raider.position)
+	check(gap0 > km.leash() + km.attack_range, "시험 조건: 마물이 배치 교전 반경 밖 (%.0f)" % gap0)
+	for i in 300:
+		dep.update_crisis()
+		km._night(1.0 / 60.0)
+	check(dep.hall_crisis and km.defending, "영주관 가까이 마물 → 성 위기, 배치 이탈")
+	check(km.position.distance_to(raider.position) < gap0 - 40.0 and km.position.distance_to(night_post) > km.leash(),
+		"성 쪽으로 접근 (%.0f → %.0f)" % [gap0, km.position.distance_to(raider.position)])
+	main.monsters.clear()
+	raider.queue_free()
+	var flips := 0
+	var was: bool = km.defending
+	for i in 900:
+		dep.update_crisis()
+		km._night(1.0 / 60.0)
+		if km.defending != was:
+			flips += 1
+			was = km.defending
+	check(not dep.hall_crisis and not km.defending and km.position.distance_to(night_post) <= 4.0,
+		"위기가 끝나면 배치 칸으로 복귀 (%.1f)" % km.position.distance_to(night_post))
+	check(flips == 1, "위기 해제 뒤 왔다 갔다 없음 (전환 %d번)" % flips)
+	main.is_night = false
 
 	print("RESULT %s (%d failures)" % ["PASS" if failures == 0 else "FAIL", failures])
 	quit(0 if failures == 0 else 1)

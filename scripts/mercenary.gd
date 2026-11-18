@@ -65,6 +65,10 @@ var activity := "대기"
 var action := ""
 var ate := false
 var retreating := false   # 한번 후퇴하면 RETREAT_UNTIL까지 여관에 머문다
+var defending := false    # 성 위기로 배치를 떠나 영주관을 지키는 중
+var mode_lock := 0.0      # 배치↔성 방어를 바꾼 뒤 남은 유지 시간
+var night_target = null   # 성 방어 중 붙잡은 마물
+var target_lock := 0.0    # night_target을 유지할 남은 시간
 var target_pos := Vector2.ZERO
 var doing_time := 0.0
 var attack_cd := 0.0
@@ -345,7 +349,10 @@ func _night(delta: float) -> void:
 		return
 	if style() == "heal" and _try_heal(delta):
 		return
-	# 담당 칸에서 너무 멀어졌으면(밀림·길 우회) 먼저 돌아간다
+	if _update_defend(delta):
+		_defend_hall(delta)
+		return
+	# 담당 칸에서 너무 멀어졌으면(밀림·길 우회·성 방어 뒤) 먼저 돌아간다
 	if has_post() and position.distance_to(post_center()) > leash() + 8.0:
 		activity = "복귀"
 		_move_to(post_center(), delta)
@@ -357,13 +364,58 @@ func _night(delta: float) -> void:
 		if position.distance_to(guard) > 4.0:
 			_move_to(guard, delta)
 		return
+	_fight(target, delta)
+
+
+## 성 위기면 배치를 떠난다. 바꾼 뒤 SWITCH_HOLD초는 되돌리지 않는다 (왔다 갔다 방지).
+func _update_defend(delta: float) -> bool:
+	mode_lock = maxf(0.0, mode_lock - delta)
+	target_lock = maxf(0.0, target_lock - delta)
+	var want: bool = has_post() and game.deployment.hall_crisis
+	if want != defending and mode_lock <= 0.0:
+		defending = want
+		mode_lock = Deployment.SWITCH_HOLD
+		night_target = null
+	return defending
+
+
+## 성 방어: 내 교전 반경 안 마물이 먼저, 없으면 영주관 쪽 마물 중 나와 가까운 것부터.
+func _defend_hall(delta: float) -> void:
+	var t = night_target
+	if t == null or not is_instance_valid(t) or not game.monsters.has(t) or target_lock <= 0.0:
+		t = _nearest_monster(position, attack_range + Deployment.ENGAGE_PAD)
+		if t == null:
+			t = game.deployment.hall_threat(position)
+		night_target = t
+		target_lock = Deployment.SWITCH_HOLD if t != null else 0.0
+	if t == null:
+		activity = "성 방어"
+		var guard: Vector2 = game.buildings["hall"]["spot"] + guard_offset
+		if position.distance_to(guard) > 4.0:
+			_move_to(guard, delta)
+		return
+	_fight(t, delta)
+
+
+func _nearest_monster(from: Vector2, radius: float):
+	var best = null
+	var best_d := radius
+	for mo in game.monsters:
+		if is_instance_valid(mo) and mo.position.distance_to(from) <= best_d:
+			best_d = mo.position.distance_to(from)
+			best = mo
+	return best
+
+
+## 다가가서 친다. 배치돼 있고 성 방어 중이 아니면 leash 끝까지만 나간다.
+func _fight(target, delta: float) -> void:
 	var tpos: Vector2 = target.position
 	# 큰 마물(엘리트)은 몸이 큰 만큼 조금 떨어져서도 닿는다. 겹치지 않게.
 	var reach := attack_range + maxf(0.0, float(target.body_size) - 6.0)
 	if position.distance_to(tpos) > reach:
-		var goal := _leashed(tpos)
+		var goal := tpos if defending else _leashed(tpos)
 		if position.distance_to(goal) > 2.0:
-			activity = "돌격"
+			activity = "성 방어" if defending else "돌격"
 			_move_to(goal, delta)
 		else:
 			activity = "대기"   # leash 끝에서 마물이 다가오기를 기다린다
@@ -504,6 +556,9 @@ func gain_xp(amount: float) -> void:
 
 func on_dawn() -> void:
 	retreating = false
+	defending = false
+	mode_lock = 0.0
+	night_target = null
 	clear_summons()
 	if downed:
 		downed = false
@@ -599,7 +654,7 @@ func _draw() -> void:
 	top -= mini(stack, 3) * 8
 	_label(f, merc_name, top - 5, name_col)
 	# 행동 이름은 선택했을 때와 위급 상태일 때만, 이름 위에 (겹침 방지)
-	if game.selected == self or activity in ["후퇴", "친구 구출", "배고픔", "치유"]:
+	if game.selected == self or activity in ["후퇴", "친구 구출", "배고픔", "치유", "성 방어"]:
 		_label(f, activity, top - 13, Color(1, 1, 1, 0.85))
 
 

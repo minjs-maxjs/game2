@@ -69,6 +69,8 @@ var font_m: FontFile
 var font_l: FontFile
 
 var modulate_node: CanvasModulate
+var hud_root: Control      # HUD 전체 (배치 클릭이 UI에 막히는지 판정할 때 쓴다)
+var hud_body: Control      # Tab으로 숨기는 부분
 var hud_label: Label
 var res_labels: Array[Label] = []
 var info_label: Label
@@ -219,6 +221,7 @@ func damage_hall(amount: float) -> void:
 	if game_over:
 		return
 	hall_hp -= amount
+	deployment.note_hall_hit()
 	if hall_hp <= 0.0:
 		hall_hp = 0.0
 		game_over = true
@@ -281,6 +284,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_tree().reload_current_scene()
 		elif key.keycode == KEY_SPACE:
 			_on_speed()
+		elif key.keycode == KEY_TAB:
+			toggle_hud()
 		return
 	var mb := event as InputEventMouseButton
 	if mb == null or not mb.pressed:
@@ -529,8 +534,13 @@ func _update_growth_panel() -> void:
 
 
 func _on_speed() -> void:
-	Engine.time_scale = 2.0 if Engine.time_scale < 1.5 else 1.0
-	speed_button.text = "배속 x%d" % int(Engine.time_scale)
+	deployment.set_base_speed(2.0 if deployment.base_speed() < 1.5 else 1.0)
+	speed_button.text = "배속 x%d" % int(deployment.base_speed())
+
+
+## Tab: HUD를 숨기면 맵 전체가 보이고 클릭된다 (선택은 유지되어 배치할 수 있다).
+func toggle_hud() -> void:
+	hud_body.visible = not hud_body.visible
 
 
 # ------------------------------------------------------------------ HUD
@@ -591,11 +601,20 @@ func _make_theme() -> Theme:
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	hud_root = Control.new()
+	hud_root.size = WORLD_SIZE
+	hud_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_root.theme = _make_theme()
+	layer.add_child(hud_root)
 	var root := Control.new()
 	root.size = WORLD_SIZE
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.theme = _make_theme()
-	layer.add_child(root)
+	hud_root.add_child(root)
+	hud_body = root
+	var hide_btn := _add_button(hud_root, "Tab", toggle_hud)
+	hide_btn.position = Vector2(612, 342)
+	hide_btn.size = Vector2(26, 16)
+	hide_btn.tooltip_text = "HUD 숨김/보임"
 
 	var top := Panel.new()
 	top.position = Vector2(-1, -1)
@@ -694,8 +713,7 @@ func _update_hud() -> void:
 	if selected != null and is_instance_valid(selected):
 		info_label.text = selected.describe()
 	else:
-		info_label.text = "쪼꼬미 클릭: 육성 창 · 낮에 고른 뒤 맵 클릭: 배치
-SPACE 배속 · 우클릭 선택 해제"
+		info_label.text = "쪼꼬미 클릭: 육성 창 · 고른 뒤 맵 클릭: 배치\nSPACE 배속 · 우클릭 선택 해제 · Tab HUD 숨김"
 	_update_growth_panel()
 
 
