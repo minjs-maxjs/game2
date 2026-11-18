@@ -51,7 +51,7 @@ var buildings: Dictionary = {
 	"training": {"name": "훈련장", "pos": Vector2(152, 240), "spot": Vector2(152, 266), "spread": Vector2(30, 3), "label": Vector2(152, 220)},
 	"farm": {"name": "밭", "pos": Vector2(408, 232), "spot": Vector2(408, 236), "spread": Vector2(30, 10), "label": Vector2(408, 204)},
 	"forest": {"name": "숲", "pos": Vector2(48, 80), "spot": Vector2(56, 136), "spread": Vector2(36, 3), "label": Vector2(104, 40)},
-	"plaza": {"name": "광장", "pos": Vector2(280, 104), "spot": Vector2(280, 108), "spread": Vector2(22, 10), "label": Vector2(280, 76)},
+	"plaza": {"name": "광장", "pos": Vector2(280, 104), "spot": Vector2(280, 136), "spread": Vector2(40, 3), "label": Vector2(280, 76)},
 }
 var hall_rect := Rect2(224, 160, 96, 48)
 var rifts: Array[Vector2] = [Vector2(590, 262), Vector2(500, 50), Vector2(22, 250)]
@@ -71,6 +71,7 @@ var font_l: FontFile
 
 var modulate_node: CanvasModulate
 var hud_label: Label
+var res_labels: Array[Label] = []
 var info_label: Label
 var log_label: Label
 var banner: Label
@@ -597,8 +598,22 @@ func _build_hud() -> void:
 	bottom.size = Vector2(556, 67)
 	root.add_child(bottom)
 
-	hud_label = _make_label(Vector2(6, 2), Vector2(628, 24))
+	hud_label = _make_label(Vector2(6, 2), Vector2(628, 12))
 	root.add_child(hud_label)
+	# 자원 줄: 아이콘(금화·식량·목재·잔재) + 숫자
+	var icons := MapArt.own_tex("icons")
+	for i in 4:
+		var ic := TextureRect.new()
+		var at := AtlasTexture.new()
+		at.atlas = icons
+		at.region = Rect2(i * 14, 0, 14, 14)
+		ic.texture = at
+		ic.position = Vector2(4 + i * 72, 12)
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.add_child(ic)
+		var l := _make_label(Vector2(20 + i * 72, 13), Vector2(52, 12))
+		root.add_child(l)
+		res_labels.append(l)
 	log_label = _make_label(Vector2(6, 298), Vector2(286, 60))
 	root.add_child(log_label)
 	info_label = _make_label(Vector2(300, 298), Vector2(250, 60))
@@ -663,9 +678,12 @@ func _update_hud() -> void:
 		phase = "밤 · 남은 마물 %d" % (to_spawn + monsters.size())
 	else:
 		phase = "낮 · 밤까지 %d초" % maxi(0, int(DAY_LENGTH - phase_time))
-	hud_label.text = "%d일째  %s        영주관 %d/%d    용병 %d/%d\n금화 %d    식량 %d    목재 %d    마물의 잔재 %d" % [
-		day, phase, int(hall_hp), int(HALL_MAX_HP), mercs.size(), MAX_MERCS,
-		int(gold), int(food), int(wood), residue]
+	hud_label.text = "%d일째  %s        영주관 %d/%d    용병 %d/%d" % [
+		day, phase, int(hall_hp), int(HALL_MAX_HP), mercs.size(), MAX_MERCS]
+	var vals := [int(gold), int(food), int(wood), residue]
+	var names := ["금화", "식량", "목재", "잔재"]
+	for i in res_labels.size():
+		res_labels[i].text = "%s %d" % [names[i], vals[i]]
 	if selected != null and is_instance_valid(selected):
 		info_label.text = selected.describe()
 	else:
@@ -703,6 +721,11 @@ func _place_buildings(img: Image, blocked: Array[Vector2i]) -> void:
 				blocked.append(Vector2i(x, y))
 	for x in range(14, 20):
 		blocked.append(Vector2i(x, 9))
+
+
+## 자체 그림 띠에서 한 프레임을 발밑(foot) 기준으로 맵에 찍는다.
+func _stamp_own(img: Image, name: String, frame: int, w: int, h: int, foot: Vector2i) -> void:
+	img.blend_rect(MapArt.own(name), Rect2i(frame * w, 0, w, h), foot - Vector2i(w / 2, h))
 
 
 ## 큰길·샛길 칸 (길찾기 비용 1). 그림과 상관없이 같은 배치.
@@ -746,16 +769,19 @@ func _compose_srw() -> void:
 		for x in range(23, 28):
 			farm.append(Vector2i(x, y))
 	MapArt.autotile(img, "dirt", farm)
-	for x in range(24, 27):
-		MapArt.prop(img, "tuft_a" if x % 2 == 0 else "tuft_b", x, 14)
+	for y in range(13, 16):
+		for x in range(24, 27):
+			_stamp_own(img, "crops", h.randi() % 4, 16, 22, Vector2i(x * TILE + 8, (y + 1) * TILE))
 	MapArt.prop(img, "post", 29, 13)
 	MapArt.prop(img, "post", 29, 15)
 	blocked.append_array([Vector2i(29, 13), Vector2i(29, 15)])
-	# 광장: 가운데 가로등, 양옆 벤치
-	MapArt.prop(img, "lamp", 17, 6)
-	MapArt.prop(img, "bench", 15, 5)
-	MapArt.prop(img, "bench", 18, 5)
-	blocked.append_array([Vector2i(17, 6), Vector2i(17, 5)])
+	# 광장: 가운데 분수, 양옆 가로등
+	_stamp_own(img, "prop_fountain", 0, 36, 40, Vector2i(280, 120))
+	MapArt.prop(img, "lamp", 15, 6)
+	MapArt.prop(img, "lamp", 19, 6)
+	for c in [Vector2i(16, 6), Vector2i(17, 6), Vector2i(18, 6), Vector2i(16, 5), Vector2i(17, 5), Vector2i(18, 5),
+			Vector2i(15, 6), Vector2i(19, 6), Vector2i(17, 7)]:
+		blocked.append(c)
 	# 식당 옆 통, 여관 옆 표지판
 	MapArt.prop(img, "barrel", 26, 6)
 	MapArt.prop(img, "bucket", 26, 5)
@@ -768,8 +794,8 @@ func _compose_srw() -> void:
 	MapArt.prop(img, "fence_r", 11, 14)
 	for x in range(7, 12):
 		blocked.append(Vector2i(x, 14))
-	MapArt.prop(img, "post", 8, 15)
-	MapArt.prop(img, "post", 10, 15)
+	_stamp_own(img, "prop_scarecrow", 0, 20, 24, Vector2i(8 * TILE + 8, 16 * TILE))
+	_stamp_own(img, "prop_target", 0, 20, 24, Vector2i(10 * TILE + 8, 16 * TILE))
 	MapArt.prop(img, "crate", 6, 15)
 	blocked.append_array([Vector2i(8, 15), Vector2i(10, 15), Vector2i(6, 15)])
 	# 숲: 큰 나무(2x2)와 소나무를 엇갈려

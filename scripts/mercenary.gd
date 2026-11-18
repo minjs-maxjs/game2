@@ -6,6 +6,16 @@ extends Node2D
 const JobData = preload("res://scripts/job_data.gd")
 const Summon = preload("res://scripts/summon.gd")
 const CharSprites = preload("res://scripts/char_sprites.gd")
+const MapArt = preload("res://scripts/map_art.gd")
+
+## 공격·치유 효과 그림 (assets/agra/fx_*.png). [파일, 칸 크기, 프레임 수, 재생 시간]
+const FX := {
+	"slash": ["fx_slash", 24, 3, 0.18],
+	"spark": ["fx_spark", 16, 2, 0.14],
+	"boom": ["fx_boom", 36, 3, 0.36],
+	"heal": ["fx_heal", 22, 3, 0.4],
+}
+const BOLT_TIME := 0.16
 
 ## 성별마다 이름 목록이 따로 있다. 다 쓰면 겹쳐도 된다.
 const NAMES := {
@@ -59,6 +69,11 @@ var flash_t := 0.0
 var flash_color := Color.YELLOW
 var splash_at := Vector2.ZERO
 var splash_t := 0.0
+var fx := ""          # 지금 재생 중인 효과 (FX 키)
+var fx_at := Vector2.ZERO
+var fx_t := 0.0
+var bolt_t := 0.0     # 원거리 탄환이 날아가는 중
+var bolt_to := Vector2.ZERO
 var sprite_index := 96          # 팩이 없을 때 쓰는 Kenney 스프라이트
 var char_id := 0                # Super Retro World 캐릭터 번호 (0 = 팩 없음)
 var dir := CharSprites.Dir.DOWN
@@ -201,6 +216,8 @@ func _process(delta: float) -> void:
 	attack_cd = maxf(0.0, attack_cd - delta)
 	flash_t = maxf(0.0, flash_t - delta)
 	splash_t = maxf(0.0, splash_t - delta)
+	fx_t = maxf(0.0, fx_t - delta)
+	bolt_t = maxf(0.0, bolt_t - delta)
 	moving = false
 	if downed:
 		activity = "쓰러짐"
@@ -349,16 +366,22 @@ func _attack(target, tpos: Vector2) -> void:
 			var radius := 18.0 + tier * 5.0
 			splash_at = flash_to
 			splash_t = 0.2
+			_play_fx("boom", flash_to)
 			for mo in game.monsters.duplicate():
 				if is_instance_valid(mo) and mo != target and mo.position.distance_to(tpos) < radius:
 					mo.take_damage(dmg * 0.6, self)
 		"ranged":
 			flash_color = Color("ffe08a")
+			bolt_to = flash_to
+			bolt_t = BOLT_TIME
+			_play_fx("spark", flash_to)
 		"heal", "summon":
 			dmg *= 0.5
 			flash_color = Color("a0ffe0")
+			_play_fx("spark", flash_to)
 		_:
 			flash_color = Color.WHITE
+			_play_fx("slash", flash_to)
 	if is_instance_valid(target):
 		target.take_damage(dmg, self)
 
@@ -406,6 +429,7 @@ func _try_heal(delta: float) -> bool:
 		flash_to = wpos - position
 		flash_t = 0.2
 		flash_color = Color(0.5, 1.0, 0.6)
+		_play_fx("heal", flash_to)
 		gain_xp(1.0)
 	return true
 
@@ -527,10 +551,7 @@ func _draw() -> void:
 	if hp < max_hp:
 		draw_rect(Rect2(-6, top - 4, 12, 2), Color(0.1, 0.1, 0.1))
 		draw_rect(Rect2(-6, top - 4, floorf(12.0 * hp / max_hp), 2), Color("5ad05a"))
-	if flash_t > 0.0:
-		draw_line(Vector2(0, -8), flash_to + Vector2(0, -6), flash_color, 1.0)
-	if splash_t > 0.0:
-		draw_arc(splash_at + Vector2(0, -6), 18.0 + tier * 5.0, 0.0, TAU, 20, Color(0.8, 0.6, 1.0, 0.7), 1.0)
+	_draw_fx()
 	var f: Font = game.font_s
 	# 이름은 항상 머리 위에 (등급 색). 체력바 바로 위.
 	var name_col: Color = gcol if grade > 0 else Color(0.95, 0.92, 0.85)
@@ -546,6 +567,32 @@ func _draw() -> void:
 	# 행동 이름은 선택했을 때와 위급 상태일 때만, 이름 위에 (겹침 방지)
 	if game.selected == self or activity in ["후퇴", "친구 구출", "배고픔", "치유"]:
 		_label(f, activity, top - 13, Color(1, 1, 1, 0.85))
+
+
+func _play_fx(kind: String, at: Vector2) -> void:
+	fx = kind
+	fx_at = at
+	fx_t = FX[kind][3]
+
+
+## 효과는 대상 위치(용병 기준 상대 좌표)에 그린다. 원거리는 탄환이 날아간 뒤 불꽃.
+func _draw_fx() -> void:
+	if bolt_t > 0.0:
+		var k := 1.0 - bolt_t / BOLT_TIME
+		var p := Vector2(0, -8).lerp(bolt_to + Vector2(0, -8), k).floor()
+		draw_set_transform(p, 0.0, Vector2(-1.0 if bolt_to.x < 0 else 1.0, 1.0))
+		draw_texture(MapArt.own_tex("fx_bolt"), Vector2(-6, -4))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return   # 맞는 순간까지는 불꽃을 미룬다
+	if fx_t <= 0.0 or fx == "":
+		return
+	var d: Array = FX[fx]
+	var size: int = d[1]
+	var frames: int = d[2]
+	var f := mini(frames - 1, int((1.0 - fx_t / d[3]) * frames))
+	draw_set_transform((fx_at + Vector2(0, -8)).floor(), 0.0, Vector2(-1.0 if fx_at.x < 0 else 1.0, 1.0))
+	draw_texture_rect_region(MapArt.own_tex(d[0]), Rect2(-size / 2.0, -size / 2.0, size, size), Rect2(f * size, 0, size, size))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _label(f: Font, text: String, y: float, col: Color) -> void:
