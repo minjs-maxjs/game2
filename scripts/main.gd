@@ -10,6 +10,7 @@ const MapArt = preload("res://scripts/map_art.gd")
 const Deployment = preload("res://scripts/deployment.gd")
 const StatPanel = preload("res://scripts/stat_panel.gd")
 const WaveDirector = preload("res://scripts/wave_director.gd")
+const WaveHud = preload("res://scripts/wave_hud.gd")
 const TOWN_TEX := preload("res://assets/kenney_tiny_town/tilemap_packed.png")
 const DUNGEON_TEX := preload("res://assets/kenney_tiny_dungeon/tilemap_packed.png")
 
@@ -41,6 +42,7 @@ var elapsed := 0.0
 
 var deployment: Deployment
 var director: WaveDirector   # 밤 파도 · 휴식 · 새벽 정산
+var wave_hud: WaveHud         # 상단 일차·웨이브 배너, 밤 시작 연출
 var selected = null
 
 ## pos: 건물 중심, spot: 용병이 모이는 자리, spread: 모이는 범위, label: 이름표 위치
@@ -134,7 +136,7 @@ func _start_night() -> void:
 	is_night = true
 	phase_time = 0.0
 	director.start_night()
-	_show_banner("%d일째 밤 — 균열이 열린다" % day)
+	wave_hud.night_intro()
 	for m in mercs:
 		m.on_night_start()
 	add_log("균열에서 마물이 몰려온다! (%d마리 · %d파도)" % [director.night_total, director.waves.size()])
@@ -205,7 +207,9 @@ func _spawn_merc(forced_job: String = "") -> void:
 func _spawn_monster(elite: bool) -> void:
 	var mo: Monster = Monster.new()
 	mo.game = self
-	var r: Vector2 = rifts[rng.randi() % rifts.size()]
+	var ri := rng.randi() % rifts.size()
+	var r: Vector2 = rifts[ri]
+	mo.set_meta("rift", ri)
 	mo.position = r + Vector2(rng.randf_range(-8, 8), rng.randf_range(-8, 8))
 	mo.setup(day, elite, rng)
 	add_child(mo)
@@ -687,6 +691,9 @@ func _build_hud() -> void:
 	_add_button(menu, "훈련장 강화\n목재 30", _on_upgrade_training)
 	speed_button = _add_button(menu, "배속 x1", _on_speed)
 	_build_growth_panel(root)
+	wave_hud = WaveHud.new()
+	root.add_child(wave_hud)
+	wave_hud.setup(self)
 
 
 func _make_label(pos: Vector2, sz: Vector2) -> Label:
@@ -721,15 +728,8 @@ func _show_banner(text: String, sticky: bool = false) -> void:
 
 
 func _update_hud() -> void:
-	var phase := ""
-	if is_night:
-		phase = "밤 · 남은 마물 %d" % director.wave_info()["remaining"]
-	elif director.is_dawn:
-		phase = "새벽 · 정산 중"
-	else:
-		phase = "낮 · 밤까지 %d초" % maxi(0, int(DAY_LENGTH - phase_time))
-	hud_label.text = "%d일째  %s        영주관 %d/%d    용병 %d/%d" % [
-		day, phase, int(hall_hp), int(HALL_MAX_HP), mercs.size(), MAX_MERCS]
+	# 일차·낮밤·파도는 상단 중앙 배너(wave_hud.gd)가 보여 준다
+	hud_label.text = "영주관 %d/%d    용병 %d/%d" % [int(hall_hp), int(HALL_MAX_HP), mercs.size(), MAX_MERCS]
 	var vals := [int(gold), int(food), int(wood), residue]
 	var names := ["금화", "식량", "목재", "잔재"]
 	for i in res_labels.size():

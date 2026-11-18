@@ -76,6 +76,9 @@ func _process(_delta: float) -> bool:
 	check(not main.try_promote(m), "잔재가 없으면 전직 불가")
 	main.residue = 20
 	main.gold = 500.0
+	var nt2: Dictionary = m.next_tier()   # 주 능력치 조건(16번에서 따로 검증)은 채워 둔다 — 무작위 능력치에 따라 흔들리지 않게
+	if nt2.has("stat_req"):
+		m.stats[nt2["stat"]] = maxf(float(m.stats[nt2["stat"]]), float(nt2["stat_req"]))
 	var atk_before: float = m.atk
 	check(main.try_promote(m), "조건을 채우면 전직")
 	check(m.tier == 1 and m.atk > atk_before, "전직 후 단계 1, 공격력 상승 (%s, %d → %d)" % [m.title(), int(atk_before), int(m.atk)])
@@ -421,6 +424,39 @@ func _process(_delta: float) -> bool:
 	check(wi["remaining"] == 0 and wi["wave"] == wi["waves"], "wave_info: 마지막 파도 · 남은 0")
 	dir.update_night(1.0 / 60.0)
 	check(dir.is_dawn, "마지막 파도를 막으면 새벽")
+	dir.continue_day()
+	main.is_night = false
+
+	# 18) 일차·웨이브 HUD: 배너 글자, 클릭 통과, 밤 시작 연출, 새벽 요약
+	var wh = main.wave_hud
+	main.day = 3
+	main.phase_time = 0.0
+	wh.refresh()
+	var pv: Dictionary = dir.night_preview()
+	check(wh.banner.visible and wh.title_label.text == "3일차 · 낮" and wh.detail_label.text == "오늘 밤: 마물 %d마리 (엘리트 1)" % pv["total"],
+		"낮 배너: %s / %s" % [wh.title_label.text, wh.detail_label.text])
+	check(is_equal_approx(wh.bar.ratio, 1.0), "낮 남은 시간 바 가득")
+	main.day = 4
+	wh.refresh()
+	check(not wh.detail_label.text.contains("엘리트"), "엘리트 없는 날은 괄호 생략 (%s)" % wh.detail_label.text)
+	main.day = 3
+	var bc: Vector2 = wh.banner.get_global_rect().get_center()
+	check(not dep.ui_blocks(bc) and not dep.ui_blocks(wh.banner.get_global_rect().position + Vector2(2, 2)), "배너는 배치 클릭을 막지 않는다")
+	check(not wh.banner.get_global_rect().intersects(Rect2(556, 0, 84, 360)), "배너가 우상단 메뉴 자리를 비운다")
+	main._start_night()
+	main.monsters.clear()
+	wh.refresh()
+	check(main.is_night and wh.title_label.text == "3일차 · 밤" and wh.detail_label.text.begins_with("파도 1/3"),
+		"밤 배너: %s / %s" % [wh.title_label.text, wh.detail_label.text])
+	check(wh.intro.modulate.a > 0.9 and wh.intro.text == "3일차 밤 — 마물 %d마리" % dir.night_total and wh.intro_elite.text == "엘리트 출현!",
+		"밤 시작 연출: %s %s" % [wh.intro.text, wh.intro_elite.text])
+	check(wh.intro.mouse_filter == Control.MOUSE_FILTER_IGNORE and not dep.ui_blocks(Vector2(320, 98)), "밤 시작 연출은 입력을 막지 않는다")
+	main._start_dawn()
+	wh.refresh()
+	var sum_text: String = dir.panel.summary_label.text
+	check(not wh.banner.visible and sum_text.begins_with("3일차 방어 성공 — 처치 ") and sum_text.contains("쓰러진 쪼꼬미") and sum_text.contains("영주관 -"),
+		"새벽 요약: %s" % sum_text.replace("
+", " / "))
 	dir.continue_day()
 	main.is_night = false
 
