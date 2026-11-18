@@ -155,6 +155,80 @@ func _process(_delta: float) -> bool:
 		var end: Vector2 = pts[pts.size() - 1] if pts.size() > 0 else r
 		check(main.hall_rect.grow(10.0 + 6.0 * 0.5).has_point(end), "균열 %s → 영주관 공격 가능 (끝 %s)" % [r, end])
 
+	# 10) 배치: 클릭 → 16px 칸에 스냅, 막힌 곳·HUD 거부, 같은 쪼꼬미 다시 클릭 → 해제
+	var dep = main.deployment
+	var km = null
+	for o in main.mercs:
+		if o.style() == "melee":
+			km = o
+	main.is_night = false
+	main.select(km)
+	var spot: Vector2 = main.buildings["hall"]["spot"] + Vector2(53, 5)
+	check(dep.handle_click(spot, null) and km.post_pos == main.cell_of(spot), "맵 클릭으로 배치 (칸 %s)" % [km.post_pos])
+	var cell = km.post_pos
+	check(dep.handle_click(Vector2(100, 10), null) and km.post_pos == cell, "HUD 띠는 배치 거부")
+	check(dep.handle_click(main.buildings["hall"]["pos"], null) and km.post_pos == cell, "건물(막힌 칸)은 배치 거부")
+	check(dep.handle_click(km.position, km) and km.post_pos == null, "같은 쪼꼬미를 다시 누르면 배치 해제")
+
+	# 11) 밤: 배치된 쪼꼬미는 leash 밖으로 쫓아가지 않는다
+	km.post_pos = dep._free_cell(spot, {})
+	var post: Vector2 = dep.cell_center(km.post_pos)
+	km.position = post
+	km.hp = km.max_hp
+	km.retreating = false
+	km.downed = false
+	main.is_night = true
+	main.monsters.clear()
+	var lure = preload("res://scripts/monster.gd").new()
+	lure.game = main
+	lure.hp = 99999.0
+	main.add_child(lure)
+	main.monsters.append(lure)
+	# 교전 반경 안이지만 leash 밖: leash 끝까지만 나가서 싸운다
+	lure.position = post + Vector2(km.leash() + km.attack_range - 4.0, 0)
+	var max_out := 0.0
+	for i in 360:
+		km.attack_cd = 9.0
+		km._night(1.0 / 60.0)
+		max_out = maxf(max_out, km.position.distance_to(post))
+	check(max_out <= km.leash() + 2.0, "배치 시 leash(%d) 밖으로 안 나감 (최대 %.1f)" % [int(km.leash()), max_out])
+	check(max_out > km.leash() * 0.5, "leash 안쪽까지는 마물 쪽으로 나간다 (%.1f)" % max_out)
+	# 교전 반경 밖의 마물: 자리를 지킨다
+	km.position = post
+	lure.position = post + Vector2(km.leash() + km.attack_range + 40.0, 0)
+	for i in 120:
+		km._night(1.0 / 60.0)
+	check(km.position.distance_to(post) <= 4.0 and km.activity == "배치", "교전 반경 밖 마물은 무시하고 자리 지킴 (%s)" % km.activity)
+	# 배치가 없으면 예전처럼 가장 가까운 마물에게 돌격
+	km.post_pos = null
+	km.position = post
+	for i in 120:
+		km._night(1.0 / 60.0)
+	check(km.position.distance_to(post) > km.leash() + 8.0 and km.activity == "돌격", "배치 없으면 기존처럼 추격 (%.1f)" % km.position.distance_to(post))
+	main.monsters.clear()
+	lure.queue_free()
+	main.is_night = false
+
+	# 12) 자동 배치: 모두 다른 칸, 전열(근접)이 후열보다 영주관에서 멀다
+	dep.auto_deploy()
+	var cells := {}
+	var all_ok := true
+	var hall_spot: Vector2 = main.buildings["hall"]["spot"]
+	var front := 0.0
+	var back := 9999.0
+	for o in main.mercs:
+		if o.post_pos == null or cells.has(o.post_pos) or not dep.is_placeable(dep.cell_center(o.post_pos)):
+			all_ok = false
+			continue
+		cells[o.post_pos] = true
+		var dd: float = dep.cell_center(o.post_pos).distance_to(hall_spot)
+		if dep._row_of(o) == 0:
+			front = maxf(front, dd)
+		elif dep._row_of(o) == 2:
+			back = minf(back, dd)
+	check(all_ok and cells.size() == main.mercs.size(), "자동 배치: %d명 모두 서로 다른 빈 칸" % main.mercs.size())
+	check(front > back, "자동 배치: 전열이 후열보다 앞 (전열 %.0f · 후열 %.0f)" % [front, back])
+
 	print("RESULT %s (%d failures)" % ["PASS" if failures == 0 else "FAIL", failures])
 	quit(0 if failures == 0 else 1)
 	return true

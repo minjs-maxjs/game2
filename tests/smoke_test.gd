@@ -25,12 +25,13 @@ func _process(_delta: float) -> bool:
 	frames += 1
 	if main.is_night:
 		saw_night = true
-	# 영주 흉내: 낮에 금화가 남으면 모집, 목재가 남으면 수리
+	# 영주 흉내: 낮에 금화가 남으면 모집, 목재가 남으면 수리, 자동 배치
 	if not main.is_night and frames % 120 == 0:
 		if main.gold >= main.RECRUIT_COST + 40 and main.mercs.size() < main.MAX_MERCS:
 			main._on_recruit()
 		if main.wood >= 20 and main.hall_hp < main.HALL_MAX_HP - 80:
 			main._on_repair()
+		main.deployment.auto_deploy()   # 새로 온 쪼꼬미까지 매일 배치
 	# 건물·나무 안에 서 있는 유닛 수 (길찾기 검증)
 	for u in main.mercs + main.monsters:
 		if is_instance_valid(u):

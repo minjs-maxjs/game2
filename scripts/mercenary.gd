@@ -7,6 +7,7 @@ const JobData = preload("res://scripts/job_data.gd")
 const Summon = preload("res://scripts/summon.gd")
 const CharSprites = preload("res://scripts/char_sprites.gd")
 const MapArt = preload("res://scripts/map_art.gd")
+const Deployment = preload("res://scripts/deployment.gd")
 
 ## 공격·치유 효과 그림 (assets/agra/fx_*.png). [파일, 칸 크기, 프레임 수, 재생 시간]
 const FX := {
@@ -78,7 +79,9 @@ var dir := CharSprites.Dir.DOWN
 var facing := 1.0
 var moving := false
 var bob := 0.0
-var rally_offset := Vector2.ZERO
+var guard_offset := Vector2.ZERO   # 영주관 앞 경계 때 서로 겹치지 않게
+## 밤에 지킬 칸 (격자 좌표, 없으면 null). deployment.gd가 정한다.
+var post_pos = null
 var path := PackedVector2Array()
 var path_goal := Vector2(INF, INF)
 var repath_cd := 0.0
@@ -119,7 +122,7 @@ func roll_identity(rng: RandomNumberGenerator, forced_job: String = "", taken: A
 		traits.append("근면")
 	var sprites: Array = job()["sprites"]
 	sprite_index = sprites[rng.randi() % sprites.size()]
-	rally_offset = Vector2(rng.randf_range(-18, 18), rng.randf_range(-12, 12))
+	guard_offset = Vector2(rng.randf_range(-18, 18), rng.randf_range(-12, 12))
 	target_pos = position
 	recalc()
 	hp = max_hp
@@ -342,19 +345,28 @@ func _night(delta: float) -> void:
 		return
 	if style() == "heal" and _try_heal(delta):
 		return
+	# 담당 칸에서 너무 멀어졌으면(밀림·길 우회) 먼저 돌아간다
+	if has_post() and position.distance_to(post_center()) > leash() + 8.0:
+		activity = "복귀"
+		_move_to(post_center(), delta)
+		return
 	var target = _pick_target()
 	if target == null:
-		var guard: Vector2 = game.rally_point if game.has_rally else game.buildings["hall"]["spot"]
-		activity = "집결" if game.has_rally else "경계"
-		if position.distance_to(guard + rally_offset) > 4.0:
-			_move_to(guard + rally_offset, delta)
+		var guard: Vector2 = post_center() if has_post() else game.buildings["hall"]["spot"] + guard_offset
+		activity = "배치" if has_post() else "경계"
+		if position.distance_to(guard) > 4.0:
+			_move_to(guard, delta)
 		return
 	var tpos: Vector2 = target.position
 	# 큰 마물(엘리트)은 몸이 큰 만큼 조금 떨어져서도 닿는다. 겹치지 않게.
 	var reach := attack_range + maxf(0.0, float(target.body_size) - 6.0)
 	if position.distance_to(tpos) > reach:
-		activity = "돌격"
-		_move_to(tpos, delta)
+		var goal := _leashed(tpos)
+		if position.distance_to(goal) > 2.0:
+			activity = "돌격"
+			_move_to(goal, delta)
+		else:
+			activity = "대기"   # leash 끝에서 마물이 다가오기를 기다린다
 	elif attack_cd <= 0.0:
 		activity = "전투"
 		attack_cd = attack_interval
@@ -384,14 +396,40 @@ func _attack(target, tpos: Vector2) -> void:
 		target.take_damage(dmg, self)
 
 
+func has_post() -> bool:
+	return post_pos != null
+
+
+func post_center() -> Vector2:
+	return Deployment.cell_center(post_pos)
+
+
+func leash() -> float:
+	return Deployment.leash_px(style())
+
+
+## 배치돼 있으면 p를 담당 칸의 leash 원 안으로 끌어당긴다.
+func _leashed(p: Vector2) -> Vector2:
+	if not has_post():
+		return p
+	var c := post_center()
+	var r := leash()
+	return p if c.distance_to(p) <= r else c + (p - c).normalized() * r
+
+
+## 배치돼 있으면 담당 칸에서 leash + 사거리 안에 있는 것만 상대한다.
+func _in_zone(p: Vector2) -> bool:
+	return not has_post() or post_center().distance_to(p) <= leash() + attack_range
+
+
 func _pick_target():
 	if has_trait("동료애") and friend != null and is_instance_valid(friend) and not friend.downed:
 		for mo in game.monsters:
-			if is_instance_valid(mo) and mo.position.distance_to(friend.position) < 40.0:
+			if is_instance_valid(mo) and mo.position.distance_to(friend.position) < 40.0 and _in_zone(mo.position):
 				activity = "친구 구출"
 				return mo
-	var anchor: Vector2 = game.rally_point if game.has_rally else position
-	var best_d := 90.0 if game.has_rally else 99999.0
+	var anchor: Vector2 = post_center() if has_post() else position
+	var best_d := leash() + attack_range if has_post() else 99999.0
 	var best = null
 	for mo in game.monsters:
 		if not is_instance_valid(mo):
@@ -409,7 +447,7 @@ func _try_heal(delta: float) -> bool:
 		if m.downed:
 			continue
 		var r: float = m.hp / m.max_hp
-		if r < 0.7 and m.position.distance_to(position) < 120.0:
+		if r < 0.7 and m.position.distance_to(position) < 120.0 and _in_zone(m.position):
 			hurt.append(m)
 	if hurt.is_empty():
 		return false
@@ -418,7 +456,7 @@ func _try_heal(delta: float) -> bool:
 	activity = "치유"
 	var wpos: Vector2 = worst.position
 	if position.distance_to(wpos) > attack_range:
-		_move_to(wpos, delta)
+		_move_to(_leashed(wpos), delta)
 	elif attack_cd <= 0.0:
 		attack_cd = attack_interval
 		var targets := hurt.slice(0, 2 if tier >= 2 else 1)

@@ -7,6 +7,7 @@ const Mercenary = preload("res://scripts/mercenary.gd")
 const Monster = preload("res://scripts/monster.gd")
 const JobData = preload("res://scripts/job_data.gd")
 const MapArt = preload("res://scripts/map_art.gd")
+const Deployment = preload("res://scripts/deployment.gd")
 const TOWN_TEX := preload("res://assets/kenney_tiny_town/tilemap_packed.png")
 const DUNGEON_TEX := preload("res://assets/kenney_tiny_dungeon/tilemap_packed.png")
 
@@ -38,9 +39,7 @@ var hall_hp: float = HALL_MAX_HP
 var train_bonus: float = 1.0
 var elapsed := 0.0
 
-var rally_point := Vector2.ZERO
-var has_rally := false
-var placing_rally := false
+var deployment: Deployment
 var selected = null
 
 ## pos: 건물 중심, spot: 용병이 모이는 자리, spread: 모이는 범위, label: 이름표 위치
@@ -95,6 +94,9 @@ func _ready() -> void:
 	modulate_node = CanvasModulate.new()
 	add_child(modulate_node)
 	y_sort_enabled = true
+	deployment = Deployment.new()
+	deployment.game = self
+	add_child(deployment)
 	_build_hud()
 	# 시작 편성은 고정: 기사 · 거너 · 힐러 · 마법사. 이후 모집은 직업도 무작위.
 	for job_id in ["knight", "gunner", "healer", "mage"]:
@@ -285,18 +287,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var p := get_global_mouse_position()
 	if mb.button_index == MOUSE_BUTTON_RIGHT:
-		placing_rally = false
+		select(null)
 		return
 	if mb.button_index != MOUSE_BUTTON_LEFT:
-		return
-	if placing_rally:
-		if p.y < 27.0 or p.y > 294.0 or not Rect2(Vector2.ZERO, WORLD_SIZE).has_point(p) or not is_walkable(p):
-			add_log("그곳에는 집결할 수 없다.")
-			return
-		rally_point = p
-		has_rally = true
-		placing_rally = false
-		add_log("집결 지점 지정. 밤에 이곳을 지킨다.")
 		return
 	var picked = null
 	var best := 12.0
@@ -305,6 +298,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if d < best:
 			best = d
 			picked = m
+	if deployment.handle_click(p, picked):
+		return
 	select(picked)
 
 
@@ -316,17 +311,6 @@ func _on_recruit() -> void:
 	else:
 		gold -= RECRUIT_COST
 		_spawn_merc()
-
-
-func _on_rally() -> void:
-	placing_rally = true
-	add_log("집결 지점을 클릭하라. (우클릭: 취소)")
-
-
-func _on_clear_rally() -> void:
-	has_rally = false
-	placing_rally = false
-	add_log("집결 해제. 용병들이 스스로 판단한다.")
 
 
 func _on_repair() -> void:
@@ -658,8 +642,7 @@ func _build_hud() -> void:
 	menu.add_theme_constant_override("separation", 2)
 	root.add_child(menu)
 	_add_button(menu, "용병 모집\n금화 %d" % RECRUIT_COST, _on_recruit)
-	_add_button(menu, "집결 지점", _on_rally)
-	_add_button(menu, "집결 해제", _on_clear_rally)
+	_add_button(menu, "자동 배치", deployment.auto_deploy)
 	_add_button(menu, "방책 수리\n목재 20", _on_repair)
 	_add_button(menu, "훈련장 강화\n목재 30", _on_upgrade_training)
 	speed_button = _add_button(menu, "배속 x1", _on_speed)
@@ -711,7 +694,8 @@ func _update_hud() -> void:
 	if selected != null and is_instance_valid(selected):
 		info_label.text = selected.describe()
 	else:
-		info_label.text = "쪼꼬미를 클릭하면 육성 창이 열린다.\nSPACE 배속 · 우클릭 집결 취소"
+		info_label.text = "쪼꼬미 클릭: 육성 창 · 낮에 고른 뒤 맵 클릭: 배치
+SPACE 배속 · 우클릭 선택 해제"
 	_update_growth_panel()
 
 
@@ -943,14 +927,6 @@ func _draw() -> void:
 	var bar := Rect2(240, 143, 64, 3)
 	draw_rect(bar.grow(1), COL_DARK)
 	draw_rect(Rect2(bar.position, Vector2(floorf(bar.size.x * hall_hp / HALL_MAX_HP), bar.size.y)), Color("e05a4a"))
-	# 집결 지점
-	if has_rally:
-		draw_arc(rally_point, 90.0, 0.0, TAU, 48, Color(1, 0.9, 0.3, 0.3), 1.0)
-		var rp := rally_point.floor()
-		draw_rect(Rect2(rp + Vector2(0, -14), Vector2(1, 14)), Color("5a3a20"))
-		draw_rect(Rect2(rp + Vector2(1, -14), Vector2(7, 5)), Color("e8c547"))
-	if placing_rally:
-		draw_rect(Rect2(get_global_mouse_position().floor() - Vector2(1, 1), Vector2(3, 3)), Color(1, 0.9, 0.3))
 
 
 ## 가운데 정렬 + 외곽선 텍스트
