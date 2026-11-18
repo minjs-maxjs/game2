@@ -6,9 +6,13 @@ extends Node2D
 const JobData = preload("res://scripts/job_data.gd")
 const Summon = preload("res://scripts/summon.gd")
 
-const NAMES := ["로웬", "카일", "미르", "세라", "브란", "테오", "리나", "도건",
-	"하엘", "유나", "오린", "베스", "가람", "솔", "에단", "마루", "이든", "펠",
-	"루카", "아린", "보리", "시안", "다온", "하루", "노아", "모모", "콩이", "별이"]
+## 성별마다 이름 목록이 따로 있다. 다 쓰면 겹쳐도 된다.
+const NAMES := {
+	"남": ["로웬", "카일", "브란", "테오", "도건", "오린", "가람", "에단", "이든", "펠",
+		"루카", "보리", "노아", "한결", "도윤", "마루", "솔", "준"],
+	"여": ["세라", "리나", "하엘", "유나", "베스", "미르", "아린", "시안", "다온", "하루",
+		"모모", "콩이", "별이", "소이", "라온", "나비", "윤슬", "새봄"],
+}
 ## 같은 묶음 안의 특성은 함께 가질 수 없다. 빈 문자열은 '특성 없음'.
 const TRAIT_GROUPS := [["근면", "게으름", ""], ["겁쟁이", "용맹", ""], ["동료애", "대식가", ""]]
 
@@ -19,6 +23,7 @@ const ACTION_LABEL := {"rest": "휴식", "eat": "식사", "train": "훈련",
 
 var game
 var merc_name := ""
+var gender := "남"   # "남" / "여"
 var job_id := "knight"
 var tier := 0
 var grade := 0
@@ -67,12 +72,14 @@ var repath_cd := 0.0
 
 ## 태어날 때 모든 것이 정해진다. forced_job이 비어 있으면 직업도 무작위.
 func roll_identity(rng: RandomNumberGenerator, forced_job: String = "", taken: Array[String] = []) -> void:
+	gender = "남" if rng.randf() < 0.5 else "여"
+	var pool: Array = NAMES[gender]
 	var free_names: Array = []
-	for n in NAMES:
+	for n in pool:
 		if not taken.has(n):
 			free_names.append(n)
 	if free_names.is_empty():
-		free_names = NAMES.duplicate()
+		free_names = pool.duplicate()
 	merc_name = free_names[rng.randi() % free_names.size()]
 	var ids: Array = JobData.JOBS.keys()
 	job_id = forced_job if forced_job != "" else ids[rng.randi() % ids.size()]
@@ -499,11 +506,17 @@ func _draw() -> void:
 		draw_line(Vector2(0, -8), flash_to + Vector2(0, -6), flash_color, 1.0)
 	if splash_t > 0.0:
 		draw_arc(splash_at + Vector2(0, -6), 18.0 + tier * 5.0, 0.0, TAU, 20, Color(0.8, 0.6, 1.0, 0.7), 1.0)
-	# 행동 이름은 선택했을 때만, 위급 상태는 항상 표시 (겹침 방지)
-	if game.selected != self and not (activity in ["후퇴", "친구 구출", "배고픔", "치유"]):
-		return
 	var f: Font = game.font_s
-	var w := f.get_string_size(activity, HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x
-	var tp := Vector2(floorf(-w / 2.0), -22)
-	draw_string_outline(f, tp, activity, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, 2, Color(0, 0, 0, 0.8))
-	draw_string(f, tp, activity, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(1, 1, 1, 0.9))
+	# 이름은 항상 머리 위에 (등급 색). 체력바 바로 위.
+	var name_col: Color = gcol if grade > 0 else Color(0.95, 0.92, 0.85)
+	_label(f, merc_name, -21, name_col)
+	# 행동 이름은 선택했을 때와 위급 상태일 때만, 이름 위에 (겹침 방지)
+	if game.selected == self or activity in ["후퇴", "친구 구출", "배고픔", "치유"]:
+		_label(f, activity, -29, Color(1, 1, 1, 0.85))
+
+
+func _label(f: Font, text: String, y: float, col: Color) -> void:
+	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x
+	var tp := Vector2(floorf(-w / 2.0), y)
+	draw_string_outline(f, tp, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, 2, Color(0, 0, 0, 0.85))
+	draw_string(f, tp, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, col)

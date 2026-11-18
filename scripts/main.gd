@@ -475,7 +475,7 @@ func _growth_bbcode(m) -> String:
 	var g: Dictionary = m.grade_info()
 	var j: Dictionary = m.job()
 	var gc: String = (g["color"] as Color).to_html(false)
-	var t := "[color=#%s]◆ %s[/color]  %s  Lv.%d\n" % [gc, g["name"], m.merc_name, m.level]
+	var t := "[color=#%s]◆ %s[/color]  %s (%s)  Lv.%d\n" % [gc, g["name"], m.merc_name, m.gender, m.level]
 	t += "%s  [color=#a89878](%s %d단계 · %s)[/color]\n" % [m.title(), j["name"], m.tier + 1, j["role"]]
 	t += "경험치 %d / %d\n" % [int(m.xp), int(m.xp_needed())]
 	var parts: Array[String] = []
