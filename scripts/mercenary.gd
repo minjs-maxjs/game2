@@ -64,11 +64,6 @@ var ate := false
 var target_pos := Vector2.ZERO
 var doing_time := 0.0
 var attack_cd := 0.0
-var flash_to := Vector2.ZERO
-var flash_t := 0.0
-var flash_color := Color.YELLOW
-var splash_at := Vector2.ZERO
-var splash_t := 0.0
 var fx := ""          # 지금 재생 중인 효과 (FX 키)
 var fx_at := Vector2.ZERO
 var fx_t := 0.0
@@ -214,10 +209,11 @@ func _process(delta: float) -> void:
 		return
 	bob += delta * 8.0
 	attack_cd = maxf(0.0, attack_cd - delta)
-	flash_t = maxf(0.0, flash_t - delta)
-	splash_t = maxf(0.0, splash_t - delta)
-	fx_t = maxf(0.0, fx_t - delta)
-	bolt_t = maxf(0.0, bolt_t - delta)
+	# 탄환이 날아가는 동안에는 맞는 불꽃 시간을 아껴 둔다 (도착 후에 터진다)
+	if bolt_t > 0.0:
+		bolt_t = maxf(0.0, bolt_t - delta)
+	else:
+		fx_t = maxf(0.0, fx_t - delta)
 	moving = false
 	if downed:
 		activity = "쓰러짐"
@@ -358,30 +354,23 @@ func _night(delta: float) -> void:
 
 func _attack(target, tpos: Vector2) -> void:
 	var dmg := atk * (0.7 + morale / 200.0)
-	flash_to = tpos - position
-	flash_t = 0.12
+	var to := tpos - position
 	match style():
 		"aoe":
-			flash_color = Color("c9a0ff")
 			var radius := 18.0 + tier * 5.0
-			splash_at = flash_to
-			splash_t = 0.2
-			_play_fx("boom", flash_to)
+			_play_fx("boom", to)
 			for mo in game.monsters.duplicate():
 				if is_instance_valid(mo) and mo != target and mo.position.distance_to(tpos) < radius:
 					mo.take_damage(dmg * 0.6, self)
 		"ranged":
-			flash_color = Color("ffe08a")
-			bolt_to = flash_to
+			bolt_to = to
 			bolt_t = BOLT_TIME
-			_play_fx("spark", flash_to)
+			_play_fx("spark", to)
 		"heal", "summon":
 			dmg *= 0.5
-			flash_color = Color("a0ffe0")
-			_play_fx("spark", flash_to)
+			_play_fx("spark", to)
 		_:
-			flash_color = Color.WHITE
-			_play_fx("slash", flash_to)
+			_play_fx("slash", to)
 	if is_instance_valid(target):
 		target.take_damage(dmg, self)
 
@@ -426,10 +415,7 @@ func _try_heal(delta: float) -> bool:
 		var targets := hurt.slice(0, 2 if tier >= 2 else 1)
 		for t in targets:
 			t.hp = minf(t.max_hp, t.hp + heal_power)
-		flash_to = wpos - position
-		flash_t = 0.2
-		flash_color = Color(0.5, 1.0, 0.6)
-		_play_fx("heal", flash_to)
+		_play_fx("heal", wpos - position)
 		gain_xp(1.0)
 	return true
 
