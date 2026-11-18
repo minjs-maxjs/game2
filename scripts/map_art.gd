@@ -72,6 +72,16 @@ static func own(name: String) -> Image:
 	return img
 
 
+static var _own_tex := {}
+
+
+## 자체 그림을 텍스처로 (캐시).
+static func own_tex(name: String) -> Texture2D:
+	if not _own_tex.has(name):
+		_own_tex[name] = ImageTexture.create_from_image(own(name))
+	return _own_tex[name]
+
+
 static func grass(img: Image, tx: int, ty: int) -> void:
 	img.blit_rect(_sheet("_srw_exterior_A2.png"), Rect2i(GRASS * TILE, Vector2i(TILE, TILE)), Vector2i(tx, ty) * TILE)
 

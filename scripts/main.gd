@@ -875,15 +875,15 @@ func _compose_static() -> void:
 func _draw() -> void:
 	draw_texture(static_tex, Vector2.ZERO)
 	# 균열
+	var rift_tex := MapArt.own_tex("rift")
+	var rf := int(elapsed * 6.0) % 3
 	for r in rifts:
-		var pulse := int(elapsed * 4.0) % 2
-		draw_circle(r, 20.0, Color(0.1, 0.02, 0.15, 0.55))
-		draw_circle(r, 11.0 + pulse, Color("4a1466"))
-		draw_circle(r, 7.0, Color("7b2fa8"))
-		draw_circle(r, 3.0, Color("f070ff") if is_night else Color("b05ad0"))
+		draw_circle(r, 22.0, Color(0.1, 0.02, 0.15, 0.45))
+		var glow := Color(1.25, 1.1, 1.3) if is_night else Color(0.85, 0.85, 0.9, 0.85)
+		draw_texture_rect_region(rift_tex, Rect2(r - Vector2(20, 20), Vector2(40, 40)), Rect2(rf * 40, 0, 40, 40), glow)
 		for k in 6:
 			var a := elapsed * 1.5 + k * TAU / 6.0
-			var sp := (r + Vector2(cos(a), sin(a)) * (14.0 + (k % 2) * 4.0)).floor()
+			var sp := (r + Vector2(cos(a), sin(a)) * (20.0 + (k % 2) * 4.0)).floor()
 			draw_rect(Rect2(sp, Vector2(1, 1)), Color("e8a0ff"))
 	# 이름표
 	for key in buildings:

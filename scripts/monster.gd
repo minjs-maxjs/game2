@@ -1,10 +1,22 @@
 extends Node2D
 ## 균열에서 나온 마물 — 시간의 잔재.
 ## 가까운 용병을 공격하고, 없으면 영주관을 향해 진격한다.
-## 스프라이트: Kenney Tiny Dungeon. 엘리트는 2배 크기.
+## 그림: assets/agra/mon_*.png (자체 그림, 정면 3프레임 가로 띠).
 
-const NORMAL_SPRITES := [108, 120, 121, 122, 123, 124]
-const ELITE_SPRITES := [109, 110]
+const MapArt = preload("res://scripts/map_art.gd")
+
+## 종류별 그림 크기와 능력치 배율 (hp, 공격, 속도). fly = 떠다님.
+const KINDS := {
+	"slime":    {"size": Vector2i(16, 16), "hp": 1.3, "atk": 0.8, "spd": 0.8, "fly": false},
+	"bat":      {"size": Vector2i(16, 16), "hp": 0.6, "atk": 0.9, "spd": 1.4, "fly": true},
+	"skeleton": {"size": Vector2i(16, 20), "hp": 1.0, "atk": 1.1, "spd": 1.0, "fly": false},
+	"goblin":   {"size": Vector2i(16, 20), "hp": 0.9, "atk": 1.2, "spd": 1.15, "fly": false},
+	"orc":      {"size": Vector2i(32, 32), "hp": 1.0, "atk": 1.3, "spd": 1.0, "fly": false},
+	"golem":    {"size": Vector2i(32, 32), "hp": 1.5, "atk": 0.9, "spd": 0.75, "fly": false},
+}
+const NORMAL_KINDS := ["slime", "bat", "skeleton", "goblin"]
+const ELITE_KINDS := ["orc", "golem"]
+const WALK := [0, 1, 2, 1]
 
 var game
 var max_hp := 30.0
@@ -14,7 +26,7 @@ var speed := 22.0
 var elite := false
 var reward := 8
 var body_size := 6.0
-var sprite_index := 108
+var kind := "slime"
 var attack_cd := 0.0
 var bob := 0.0
 var hit_t := 0.0
@@ -30,14 +42,18 @@ func setup(day: int, is_elite: bool, rng: RandomNumberGenerator) -> void:
 	atk = 5.0 + day * 1.2
 	speed = 20.0 + rng.randf() * 8.0
 	reward = 6 + day
-	sprite_index = NORMAL_SPRITES[rng.randi() % NORMAL_SPRITES.size()]
+	kind = NORMAL_KINDS[rng.randi() % NORMAL_KINDS.size()]
 	if elite:
 		max_hp *= 5.0
 		atk *= 2.0
 		speed *= 0.7
 		body_size = 12.0
 		reward = 50 + day * 5
-		sprite_index = ELITE_SPRITES[rng.randi() % ELITE_SPRITES.size()]
+		kind = ELITE_KINDS[rng.randi() % ELITE_KINDS.size()]
+	var k: Dictionary = KINDS[kind]
+	max_hp *= k["hp"]
+	atk *= k["atk"]
+	speed *= k["spd"]
 	hp = max_hp
 
 
@@ -115,16 +131,19 @@ func take_damage(amount: float, attacker = null) -> void:
 
 
 func _draw() -> void:
-	var s := 2.0 if elite else 1.0
-	var src := Rect2(game.tile_src(sprite_index))
-	var tint := Color(1, 0.35, 0.35) if hit_t > 0.0 else Color(0.85, 0.72, 1.0)
-	var hop := -1.0 if int(bob) % 2 == 0 else 0.0
-	draw_rect(Rect2(-5 * s, -1, 10 * s, 2), Color(0, 0, 0, 0.3))
-	draw_set_transform(Vector2(0, hop), 0.0, Vector2(facing * s, s))
-	draw_texture_rect_region(game.dungeon_tex, Rect2(-8, -16, 16, 16), src, tint)
+	var k: Dictionary = KINDS[kind]
+	var sz: Vector2i = k["size"]
+	var tex: Texture2D = MapArt.own_tex("mon_" + kind)
+	var frame: int = WALK[int(bob * 1.2) % 4]
+	var tint := Color(1, 0.45, 0.45) if hit_t > 0.0 else Color.WHITE
+	var lift := floorf(sin(bob * 1.5) * 1.5) - 5.0 if k["fly"] else 0.0
+	draw_rect(Rect2(-sz.x * 0.3, -1, sz.x * 0.6, 2), Color(0, 0, 0, 0.3))
+	draw_set_transform(Vector2(0, lift), 0.0, Vector2(facing, 1.0))
+	draw_texture_rect_region(tex, Rect2(-sz.x / 2.0, -sz.y, sz.x, sz.y), Rect2(frame * sz.x, 0, sz.x, sz.y), tint)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var s := 2.0 if elite else 1.0
 	if hp < max_hp:
 		var w := 12.0 * s
-		var y := -16.0 * s - 4.0
+		var y := -sz.y + lift - 4.0
 		draw_rect(Rect2(-w / 2.0, y, w, 2), Color(0.1, 0.1, 0.1))
 		draw_rect(Rect2(-w / 2.0, y, floorf(w * hp / max_hp), 2), Color("e05a4a"))
