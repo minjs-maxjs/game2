@@ -301,6 +301,31 @@ func _process(_delta: float) -> bool:
 	check(flips == 1, "위기 해제 뒤 왔다 갔다 없음 (전환 %d번)" % flips)
 	main.is_night = false
 
+	# 16) 능력치 바 · 전직 능력치 조건 · "+n" 표시
+	var qm = main.mercs[0]
+	main.select(qm)
+	var snt: Dictionary = qm.next_tier()
+	check(not snt.is_empty() and snt.has("stat_req"), "다음 전직에 능력치 조건이 있다")
+	if not snt.is_empty():
+		var sid: String = snt["stat"]
+		qm.level = max(qm.level, int(snt["level"]))
+		main.residue = 999
+		main.gold = 9999.0
+		var keep: float = qm.stats[sid]
+		qm.stats[sid] = float(snt["stat_req"]) - 1.0
+		check(not main.can_promote(qm), "주 능력치가 모자라면 전직 버튼 꺼짐")
+		qm.stats[sid] = float(snt["stat_req"])
+		check(main.can_promote(qm), "주 능력치를 채우면 전직 버튼 켜짐")
+		qm.stats[sid] = keep
+		var bar = main.stat_panel._bars[sid]
+		main._update_growth_panel()
+		check(bar.tick > 0.0 and bar.tick <= 1.0, "목표 눈금이 바 안에 있다 (%.2f)" % bar.tick)
+		var lvl0: int = qm.level
+		qm.gain_xp(qm.xp_needed() - qm.xp + 1.0)
+		main._update_growth_panel()
+		check(qm.level > lvl0 and not main.stat_panel.flashing().is_empty(), "레벨업 직후 \"+n\" 표시 (%s)" % str(main.stat_panel.flashing()))
+	main.select(null)
+
 	print("RESULT %s (%d failures)" % ["PASS" if failures == 0 else "FAIL", failures])
 	quit(0 if failures == 0 else 1)
 	return true

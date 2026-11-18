@@ -8,6 +8,7 @@ const Monster = preload("res://scripts/monster.gd")
 const JobData = preload("res://scripts/job_data.gd")
 const MapArt = preload("res://scripts/map_art.gd")
 const Deployment = preload("res://scripts/deployment.gd")
+const StatPanel = preload("res://scripts/stat_panel.gd")
 const TOWN_TEX := preload("res://assets/kenney_tiny_town/tilemap_packed.png")
 const DUNGEON_TEX := preload("res://assets/kenney_tiny_dungeon/tilemap_packed.png")
 
@@ -79,7 +80,9 @@ var banner: Label
 var banner_tween: Tween
 var speed_button: Button
 var growth_panel: Panel
-var growth_text: RichTextLabel
+var growth_text: RichTextLabel     # 위: 이름 · 직업 · 경험치
+var growth_text2: RichTextLabel    # 아래: 전투 수치 · 성격 · 전직
+var stat_panel: StatPanel          # 가운데: 능력치 5종 바
 var promote_button: Button
 var dismiss_button: Button
 var dismiss_armed := false
@@ -372,7 +375,7 @@ func vacation(m) -> bool:
 ## 레벨·잔재·금화가 모두 갖춰졌는가 (전직 버튼 활성화에 쓴다).
 func can_promote(m) -> bool:
 	var nt: Dictionary = m.next_tier()
-	return not nt.is_empty() and m.level >= int(nt["level"]) 		and residue >= int(nt["residue"]) and gold >= int(nt["gold"])
+	return not nt.is_empty() and m.level >= int(nt["level"]) and m.meets_stat_req(nt) 		and residue >= int(nt["residue"]) and gold >= int(nt["gold"])
 
 
 ## 전직: 레벨 조건 + 마물의 잔재 + 금화.
@@ -383,6 +386,9 @@ func try_promote(m) -> bool:
 		return false
 	if m.level < int(nt["level"]):
 		add_log("전직하려면 Lv.%d이 필요하다." % int(nt["level"]))
+		return false
+	if not m.meets_stat_req(nt):
+		add_log("전직하려면 %s %d이 필요하다." % [JobData.STAT_NAMES[nt["stat"]], int(nt["stat_req"])])
 		return false
 	if residue < int(nt["residue"]) or gold < int(nt["gold"]):
 		add_log("전직 비용 부족: 잔재 %d, 금화 %d" % [int(nt["residue"]), int(nt["gold"])])
@@ -451,9 +457,17 @@ func _build_growth_panel(root: Control) -> void:
 	growth_text.bbcode_enabled = true
 	growth_text.scroll_active = false
 	growth_text.position = Vector2(6, 4)
-	growth_text.size = Vector2(242, 206)
+	growth_text.size = Vector2(242, 40)
 	growth_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	growth_panel.add_child(growth_text)
+	stat_panel = StatPanel.new()
+	stat_panel.position = Vector2(8, 46)
+	stat_panel.setup(font_s)
+	growth_panel.add_child(stat_panel)
+	growth_text2 = growth_text.duplicate()
+	growth_text2.position = Vector2(6, 98)
+	growth_text2.size = Vector2(242, 114)
+	growth_panel.add_child(growth_text2)
 	var grid := GridContainer.new()
 	grid.columns = 3
 	grid.position = Vector2(6, 214)
@@ -472,49 +486,44 @@ func _build_growth_panel(root: Control) -> void:
 		b.custom_minimum_size = Vector2(79, 20)
 
 
-func _growth_bbcode(m) -> String:
+## 육성 창 글: [위, 아래]. 능력치 5종은 그 사이의 stat_panel이 바로 그린다.
+func _growth_bbcode(m) -> PackedStringArray:
 	var g: Dictionary = m.grade_info()
 	var j: Dictionary = m.job()
 	var gc: String = (g["color"] as Color).to_html(false)
 	var t := "[color=#%s]◆ %s[/color]  %s (%s)  Lv.%d\n" % [gc, g["name"], m.merc_name, m.gender, m.level]
 	t += "%s  [color=#a89878](%s %d단계 · %s)[/color]\n" % [m.title(), j["name"], m.tier + 1, j["role"]]
-	t += "경험치 %d / %d\n" % [int(m.xp), int(m.xp_needed())]
-	var parts: Array[String] = []
-	for sid in JobData.STATS:
-		var v: float = m.stats[sid]
-		var sname: String = JobData.STAT_NAMES[sid]
-		if sid == j["primary"]:
-			parts.append("[color=#ffd84a]%s %d[/color]" % [sname, int(v)])
-		else:
-			parts.append("%s %d" % [sname, int(v)])
-	t += "  ".join(PackedStringArray(parts.slice(0, 3))) + "\n"
-	t += "  ".join(PackedStringArray(parts.slice(3))) + "   [color=#a89878]합계 %d[/color]\n" % int(m.stat_total())
-	t += "체력 %d/%d  공격 %d  방어 %d\n" % [int(m.hp), int(m.max_hp), int(m.atk), int(m.defense)]
-	t += "사거리 %d  공격 간격 %.1f초\n" % [int(m.attack_range), m.attack_interval]
-	t += "[color=#a89878]%s[/color]\n" % j["perk"]
-	t += "성격: %s\n" % m.trait_text()
+	t += "경험치 %d / %d   [color=#a89878]능력치 합계 %d[/color]" % [int(m.xp), int(m.xp_needed()), int(m.stat_total())]
+	var b := "체력 %d/%d  공격 %d  방어 %d\n" % [int(m.hp), int(m.max_hp), int(m.atk), int(m.defense)]
+	b += "사거리 %d  공격 간격 %.1f초\n" % [int(m.attack_range), m.attack_interval]
+	b += "[color=#a89878]%s[/color]\n" % j["perk"]
+	b += "성격: %s\n" % m.trait_text()
 	var friend_name := "-"
 	if m.friend != null and is_instance_valid(m.friend):
 		friend_name = m.friend.merc_name
-	t += "기력 %d  허기 %d  사기 %d  친구 %s\n" % [int(m.energy), int(m.hunger), int(m.morale), friend_name]
+	b += "기력 %d  허기 %d  사기 %d  친구 %s\n" % [int(m.energy), int(m.hunger), int(m.morale), friend_name]
 	var nt: Dictionary = m.next_tier()
 	if nt.is_empty():
-		t += "[color=#ffd84a]최고 단계에 도달했다[/color]"
+		b += "[color=#ffd84a]최고 단계에 도달했다[/color]"
 	else:
 		var ready := can_promote(m)
-		t += "[color=#%s]다음 전직: %s\nLv.%d · 잔재 %d · 금화 %d[/color]" % [
-			"7fe07f" if ready else "a89878", nt["name"], int(nt["level"]), int(nt["residue"]), int(nt["gold"])]
+		var sname: String = JobData.STAT_NAMES[nt["stat"]]
+		b += "[color=#%s]다음 %s: Lv.%d · %s %d · 잔재 %d · 금화 %d[/color]" % [
+			"7fe07f" if ready else "a89878", nt["name"], int(nt["level"]), sname, int(nt["stat_req"]),
+			int(nt["residue"]), int(nt["gold"])]
 		# 모자란 것만 빨갛게 알려 준다
 		var lack: Array[String] = []
 		if m.level < int(nt["level"]):
 			lack.append("레벨")
+		if not m.meets_stat_req(nt):
+			lack.append("%s %d 부족" % [sname, ceili(float(nt["stat_req"]) - float(m.stats[nt["stat"]]))])
 		if residue < int(nt["residue"]):
 			lack.append("잔재 %d 부족" % (int(nt["residue"]) - residue))
 		if gold < int(nt["gold"]):
 			lack.append("금화 %d 부족" % (int(nt["gold"]) - int(gold)))
 		if not lack.is_empty():
-			t += "\n[color=#e07a6a]%s[/color]" % ", ".join(PackedStringArray(lack))
-	return t
+			b += "\n[color=#e07a6a]%s[/color]" % ", ".join(PackedStringArray(lack))
+	return PackedStringArray([t, b])
 
 
 func _update_growth_panel() -> void:
@@ -523,10 +532,13 @@ func _update_growth_panel() -> void:
 	if selected == null or not is_instance_valid(selected):
 		select(null)
 		return
-	var t := _growth_bbcode(selected)
+	var parts := _growth_bbcode(selected)
+	var t := "\n".join(parts)
 	if t != last_growth_text:
 		last_growth_text = t
-		growth_text.text = t
+		growth_text.text = parts[0]
+		growth_text2.text = parts[1]
+	stat_panel.show_merc(selected)
 	var nt: Dictionary = selected.next_tier()
 	promote_button.disabled = nt.is_empty() or not can_promote(selected)
 	if not dismiss_armed:

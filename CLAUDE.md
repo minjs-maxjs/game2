@@ -16,7 +16,8 @@ Godot 4.7 / GDScript 탑다운 픽셀 게임. 기획은 `docs/기획서_v0.5.md`
 |---|---|
 | 낮밤 순환 · 웨이브 · 자원 | `scripts/main.gd` (_process, _start_night, _update_night, _start_day) |
 | HUD · 마을 명령 버튼 | `scripts/main.gd` (_build_hud, _on_* 콜백, add_log) |
-| 육성 창 · 전직 · 방출 | `scripts/main.gd` (select, try_promote, dismiss_merc, _growth_bbcode) + `scripts/mercenary.gd` (gain_xp, promote, recalc) |
+| 육성 창 · 전직 · 방출 | `scripts/main.gd` (select, try_promote, can_promote, dismiss_merc, _growth_bbcode, _build_growth_panel) + `scripts/mercenary.gd` (gain_xp, promote, recalc, next_tier, meets_stat_req) |
+| 능력치 바 · HP 바 | `scripts/stat_panel.gd` (show_merc, _draw) + `scripts/stat_bar.gd` (draw_bar, hp_color) · 상한/조건은 `job_data.gd` (stat_cap, PROMOTE_STAT) |
 | 직업 · 등급 · 능력치 표 | `scripts/job_data.gd` (새 직업은 JOBS에 한 줄 추가) |
 | 쪼꼬미 생활 AI · 전투 | `scripts/mercenary.gd` (_day, _choose_action, _night, _attack, _try_heal) |
 | 마물 · 소환수 | `scripts/monster.gd`, `scripts/summon.gd` |

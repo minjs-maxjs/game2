@@ -8,6 +8,7 @@ const Summon = preload("res://scripts/summon.gd")
 const CharSprites = preload("res://scripts/char_sprites.gd")
 const MapArt = preload("res://scripts/map_art.gd")
 const Deployment = preload("res://scripts/deployment.gd")
+const StatBar = preload("res://scripts/stat_bar.gd")
 
 ## 공격·치유 효과 그림 (assets/agra/fx_*.png). [파일, 칸 크기, 프레임 수, 재생 시간]
 const FX := {
@@ -198,7 +199,13 @@ func next_tier() -> Dictionary:
 	if tier + 1 >= tiers.size():
 		return {}
 	return {"name": tiers[tier + 1]["name"], "level": tiers[tier + 1]["level"],
-		"residue": JobData.PROMOTE_RESIDUE[tier + 1], "gold": JobData.PROMOTE_GOLD[tier + 1]}
+		"residue": JobData.PROMOTE_RESIDUE[tier + 1], "gold": JobData.PROMOTE_GOLD[tier + 1],
+		"stat": job()["primary"], "stat_req": JobData.PROMOTE_STAT[tier + 1]}
+
+
+## 다음 전직의 능력치 조건을 채웠는가 (조건이 없으면 true).
+func meets_stat_req(nt: Dictionary) -> bool:
+	return float(stats[nt.get("stat", "str")]) >= float(nt.get("stat_req", 0))
 
 
 func promote() -> void:
@@ -637,9 +644,10 @@ func _draw() -> void:
 		draw_rect(Rect2(-7, top + 6, 1, 1), gcol)
 	if game.selected == self:
 		draw_rect(Rect2(-9, top - 2, 18, h + 4), Color(1, 0.95, 0.4), false, 1.0)
-	if hp < max_hp:
-		draw_rect(Rect2(-6, top - 4, 12, 2), Color(0.1, 0.1, 0.1))
-		draw_rect(Rect2(-6, top - 4, floorf(12.0 * hp / max_hp), 2), Color("5ad05a"))
+	# HP 바: 이름표 아래. 다친 쪼꼬미만, 밤(전투)이나 선택했을 때만.
+	if hp < max_hp and (game.is_night or game.selected == self):
+		var r := hp / max_hp
+		StatBar.draw_bar(self, Rect2(-6, top - 4, 12, 2), r, StatBar.hp_color(r))
 	_draw_fx()
 	var f: Font = game.font_s
 	# 이름은 항상 머리 위에 (등급 색). 체력바 바로 위.

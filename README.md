@@ -56,6 +56,8 @@ scripts/monster.gd     균열 마물
 scripts/job_data.gd    직업 · 등급 · 능력치 표 (새 직업은 여기에 추가)
 scripts/summon.gd      소환사의 소환수
 scripts/deployment.gd  쪼꼬미별 배치 (클릭 배치 · 자동 배치 · 깃발 마커)
+scripts/stat_bar.gd    작은 픽셀 막대 (능력치 바 · HP 바 공용)
+scripts/stat_panel.gd  육성 창 능력치 5종 줄 (바 · 목표 눈금 · "+n")
 scripts/map_art.gd     그림 불러오기 · 맵 타일 배정
 scripts/char_sprites.gd 쪼꼬미 외형 (성별·직업별 캐릭터 배정)
 tests/                 growth_test · smoke_test · screenshot

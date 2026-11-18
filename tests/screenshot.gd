@@ -1,7 +1,7 @@
 extends SceneTree
 ## 실제 렌더링 화면을 PNG로 저장한다 (헤드리스 불가, 창이 잠깐 뜬다).
 ## 실행: godot --path . --script res://tests/screenshot.gd -- <출력폴더>
-## 배치 마커(deploy.png), 낮 화면(day.png), 밤 화면(night.png), 효과가 터지는 전투 순간(battle.png)을 남긴다.
+## 배치 마커(deploy.png), 육성 창(growth.png), 낮 화면(day.png), HUD 숨김(hud_hidden.png), 밤 화면(night.png), 효과가 터지는 전투 순간(battle.png)을 남긴다.
 
 var main
 var frames := 0
@@ -27,11 +27,25 @@ func _process(_delta: float) -> bool:
 		_save("deploy.png")
 	if frames == 230:
 		main.select(main.mercs[0])
+	if frames == 232:
+		var m = main.mercs[0]
+		m.gain_xp(m.xp_needed() - m.xp + 1.0)   # 능력치 "+n" 표시 확인용
+	if frames == 236:
+		_save("growth.png")
 	if frames == 240:
 		_save("day.png")
+		main.toggle_hud()   # HUD 숨김 + 우상단 배치
+		var tr: Vector2 = main.deployment.cell_center(main.deployment._free_cell(Vector2(596, 44), {}))
+		main.deployment.handle_click(tr, null)
+	if frames == 246:
+		_save("hud_hidden.png")
+		main.toggle_hud()
 		main.select(null)
 		main._start_night()
 		main._spawn_monster(true)   # 정예 그림 확인용
+		for i in main.mercs.size():   # HP 바 확인용으로 몇 명은 다친 채 시작
+			if i % 2 == 0:
+				main.mercs[i].hp = main.mercs[i].max_hp * (0.35 + 0.2 * (i / 2))
 		Engine.time_scale = 2.0
 	if frames == 420:
 		_save("night.png")
