@@ -18,7 +18,14 @@ Godot 4.7 / GDScript 탑다운 픽셀 게임. 기획은 `docs/기획서_v0.4.md`
 | 직업 · 등급 · 능력치 표 | `scripts/job_data.gd` (새 직업은 JOBS에 한 줄 추가) |
 | 쪼꼬미 생활 AI · 전투 | `scripts/mercenary.gd` (_day, _choose_action, _night, _attack, _try_heal) |
 | 마물 · 소환수 | `scripts/monster.gd`, `scripts/summon.gd` |
-| 맵 · 길찾기 | `scripts/main.gd` (_compose_static, _build_nav, find_path, is_walkable) |
+| 맵 · 길찾기 | `scripts/main.gd` (_compose_static, _compose_srw, _road_cells, _place_buildings, _build_nav, find_path, is_walkable) |
+| 그림 불러오기 · 맵 타일 | `scripts/map_art.gd` (own_tex, autotile, prop) · 자체 그림은 `assets/agra/` |
+| 쪼꼬미 외형 (성별·직업별) | `scripts/char_sprites.gd` (CHARS, pick, sheet) |
+| 공격 · 치유 효과 | `scripts/mercenary.gd` (FX, _play_fx, _draw_fx) |
+| UI 테두리 · 버튼 | `scripts/main.gd` (_frame, _make_theme) |
+
+Super Retro World 팩(`SuperRetroWorld_CharacterPack_Full/`, `exterior-pack-free_version/`)은 재배포 금지라 .gitignore에 있다.
+없으면 Kenney 그림으로 대신 그린다. 절대 커밋하지 말 것. AI 이미지 생성에 이 팩 그림을 넣는 것도 라이선스 위반.
 
 ## 그래프 갱신 (코드를 고친 뒤)
 
