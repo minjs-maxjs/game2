@@ -1,7 +1,7 @@
 extends SceneTree
 ## 실제 렌더링 화면을 PNG로 저장한다 (헤드리스 불가, 창이 잠깐 뜬다).
 ## 실행: godot --path . --script res://tests/screenshot.gd -- <출력폴더>
-## 낮 화면(day.png), 밤 화면(night.png), 효과가 터지는 전투 순간(battle.png)을 남긴다.
+## 배치 마커(deploy.png), 낮 화면(day.png), 밤 화면(night.png), 효과가 터지는 전투 순간(battle.png)을 남긴다.
 
 var main
 var frames := 0
@@ -21,6 +21,10 @@ func _process(_delta: float) -> bool:
 	if frames == 2:
 		main._spawn_merc("summoner")
 		main.gold = 120.0
+	if frames == 200:
+		main.deployment.auto_deploy()   # 배치 마커(깃발·점선) 확인용
+	if frames == 225:
+		_save("deploy.png")
 	if frames == 230:
 		main.select(main.mercs[0])
 	if frames == 240:

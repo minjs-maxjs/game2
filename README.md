@@ -20,8 +20,9 @@
 | 입력 | 동작 |
 |---|---|
 | 좌클릭 (쪼꼬미) | 육성 창: 훈련 지원 · 휴가 · 전직 · 방출 |
-| 오른쪽 메뉴 | 용병 모집 · 집결 지점 · 집결 해제 · 방책 수리 · 훈련장 강화 · 배속 |
-| 우클릭 | 집결 지점 지정 취소 |
+| 낮에 쪼꼬미를 고른 뒤 맵 좌클릭 | 그 칸에 배치 (밤에 그 자리를 지킨다). 같은 쪼꼬미를 다시 누르면 배치 해제 |
+| 오른쪽 메뉴 | 용병 모집 · 자동 배치 · 방책 수리 · 훈련장 강화 · 배속 |
+| 우클릭 | 선택 해제 |
 | SPACE | 배속 전환 |
 | R | 패배 후 다시 시작 |
 
@@ -53,6 +54,7 @@ scripts/mercenary.gd   쪼꼬미 (탄생 · 성장 · 전직, 유틸리티 AI �
 scripts/monster.gd     균열 마물
 scripts/job_data.gd    직업 · 등급 · 능력치 표 (새 직업은 여기에 추가)
 scripts/summon.gd      소환사의 소환수
+scripts/deployment.gd  쪼꼬미별 배치 (클릭 배치 · 자동 배치 · 깃발 마커)
 scripts/map_art.gd     그림 불러오기 · 맵 타일 배정
 scripts/char_sprites.gd 쪼꼬미 외형 (성별·직업별 캐릭터 배정)
 tests/                 growth_test · smoke_test · screenshot
