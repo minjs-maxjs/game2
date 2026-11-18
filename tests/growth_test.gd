@@ -4,6 +4,7 @@ extends SceneTree
 
 const Mercenary = preload("res://scripts/mercenary.gd")
 const JobData = preload("res://scripts/job_data.gd")
+const CharSprites = preload("res://scripts/char_sprites.gd")
 
 var failures := 0
 var main
@@ -22,11 +23,21 @@ func _initialize() -> void:
 	rng.seed = 42
 	var grade_counts := [0, 0, 0, 0]
 	var job_counts := {}
+	var gender_counts := {"남": 0, "여": 0}
+	var look_ok := true
+	var name_ok := true
 	for i in 3000:
 		var m: Mercenary = Mercenary.new()
 		m.roll_identity(rng)
 		grade_counts[m.grade] += 1
 		job_counts[m.job_id] = job_counts.get(m.job_id, 0) + 1
+		gender_counts[m.gender] += 1
+		if not (m.merc_name in Mercenary.NAMES[m.gender]):
+			name_ok = false
+		if m.char_id > 0:
+			var c: Array = CharSprites.CHARS[m.char_id]
+			if c[0] != m.gender or not (m.job_id in c[1]):
+				look_ok = false
 		m.free()
 	var pct := []
 	for i in grade_counts.size():
@@ -37,6 +48,14 @@ func _initialize() -> void:
 		"등급이 높을수록 드물다")
 	check(grade_counts[3] > 0 and grade_counts[3] < 150, "레전더리는 0~5% 사이")
 	check(job_counts.size() == JobData.JOBS.size(), "모든 직업이 태어난다")
+	print("성별 분포: ", gender_counts, "  캐릭터 팩: ", CharSprites.available())
+	check(gender_counts["남"] > 1200 and gender_counts["여"] > 1200, "남녀가 고루 태어난다")
+	check(name_ok, "이름이 성별 목록에서 나온다")
+	check(look_ok, "외형이 성별·직업과 맞는다")
+	if CharSprites.available():
+		for job in JobData.JOBS:
+			for g in ["남", "여"]:
+				check(CharSprites.pick(job, g, [], rng) > 0, "%s %s 외형이 있다" % [job, g])
 
 	main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)

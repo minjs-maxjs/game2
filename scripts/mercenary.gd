@@ -5,6 +5,7 @@ extends Node2D
 
 const JobData = preload("res://scripts/job_data.gd")
 const Summon = preload("res://scripts/summon.gd")
+const CharSprites = preload("res://scripts/char_sprites.gd")
 
 ## 성별마다 이름 목록이 따로 있다. 다 쓰면 겹쳐도 된다.
 const NAMES := {
@@ -58,7 +59,9 @@ var flash_t := 0.0
 var flash_color := Color.YELLOW
 var splash_at := Vector2.ZERO
 var splash_t := 0.0
-var sprite_index := 96
+var sprite_index := 96          # 팩이 없을 때 쓰는 Kenney 스프라이트
+var char_id := 0                # Super Retro World 캐릭터 번호 (0 = 팩 없음)
+var dir := CharSprites.Dir.DOWN
 var facing := 1.0
 var moving := false
 var bob := 0.0
@@ -72,7 +75,17 @@ var repath_cd := 0.0
 
 ## 태어날 때 모든 것이 정해진다. forced_job이 비어 있으면 직업도 무작위.
 func roll_identity(rng: RandomNumberGenerator, forced_job: String = "", taken: Array[String] = []) -> void:
+	var ids: Array = JobData.JOBS.keys()
+	job_id = forced_job if forced_job != "" else ids[rng.randi() % ids.size()]
 	gender = "남" if rng.randf() < 0.5 else "여"
+	var used: Array = []
+	if game != null:
+		for other in game.mercs:
+			used.append(other.char_id)
+	char_id = CharSprites.pick(job_id, gender, used, rng)
+	if char_id == 0 and CharSprites.available():   # 그 성별에 맞는 그림이 없으면 반대 성별로
+		gender = "여" if gender == "남" else "남"
+		char_id = CharSprites.pick(job_id, gender, used, rng)
 	var pool: Array = NAMES[gender]
 	var free_names: Array = []
 	for n in pool:
@@ -81,8 +94,6 @@ func roll_identity(rng: RandomNumberGenerator, forced_job: String = "", taken: A
 	if free_names.is_empty():
 		free_names = pool.duplicate()
 	merc_name = free_names[rng.randi() % free_names.size()]
-	var ids: Array = JobData.JOBS.keys()
-	job_id = forced_job if forced_job != "" else ids[rng.randi() % ids.size()]
 	for s in JobData.STATS:
 		stats[s] = float(clampi(roundi(rng.randfn(10.0, 3.5)), 1, 25))
 	stats[job()["primary"]] += 2.0   # 직업 적성
@@ -467,41 +478,55 @@ func _follow(p: Vector2, step: float, delta: float) -> void:
 		next = path[0]
 	elif not game.is_walkable(p) and game.is_walkable(position):
 		return
-	if absf(next.x - position.x) > 0.5:
-		facing = signf(next.x - position.x)
+	var d := next - position
+	if absf(d.x) > 0.5:
+		facing = signf(d.x)
+	if d.length() > 0.5:
+		if absf(d.x) > absf(d.y):
+			dir = CharSprites.Dir.RIGHT if d.x > 0 else CharSprites.Dir.LEFT
+		else:
+			dir = CharSprites.Dir.DOWN if d.y > 0 else CharSprites.Dir.UP
 	position = position.move_toward(next, step)
 
 
 # ------------------------------------------------------------------ 그리기
-## 원점 = 발밑. 스프라이트는 16x16 (Kenney Tiny Dungeon).
+## 원점 = 발밑. 팩이 있으면 16x20 캐릭터(4방향 걷기), 없으면 16x16 Kenney.
 
 func _draw() -> void:
-	var tex: Texture2D = game.dungeon_tex
-	var src := Rect2(game.tile_src(sprite_index))
 	var gcol: Color = grade_info()["color"]
+	var sheet: Texture2D = CharSprites.sheet(char_id) if char_id > 0 else null
+	var h := 20.0 if sheet else 16.0
 	if downed:
 		draw_set_transform(Vector2(0, -4), PI / 2.0, Vector2.ONE)
-		draw_texture_rect_region(tex, Rect2(-8, -8, 16, 16), src, Color(0.55, 0.45, 0.45))
+		if sheet:
+			draw_texture_rect_region(sheet, Rect2(-8, -10, 16, 20), CharSprites.frame_rect(CharSprites.Dir.DOWN, 1), Color(0.55, 0.45, 0.45))
+		else:
+			draw_texture_rect_region(game.dungeon_tex, Rect2(-8, -8, 16, 16), Rect2(game.tile_src(sprite_index)), Color(0.55, 0.45, 0.45))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		return
-	var hop := -1.0 if moving and int(bob) % 2 == 0 else 0.0
 	# 발밑 그림자 (등급 색, 노말은 검정)
 	draw_rect(Rect2(-5, -1, 10, 2), Color(gcol, 0.6) if grade > 0 else Color(0, 0, 0, 0.25))
-	draw_set_transform(Vector2(0, hop), 0.0, Vector2(facing, 1.0))
-	draw_texture_rect_region(tex, Rect2(-8, -16, 16, 16), src)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if sheet:
+		var col: int = CharSprites.WALK[int(bob * 0.75) % 4] if moving else 1
+		draw_texture_rect_region(sheet, Rect2(-8, -20, 16, 20), CharSprites.frame_rect(dir, col))
+	else:
+		var hop := -1.0 if moving and int(bob) % 2 == 0 else 0.0
+		draw_set_transform(Vector2(0, hop), 0.0, Vector2(facing, 1.0))
+		draw_texture_rect_region(game.dungeon_tex, Rect2(-8, -16, 16, 16), Rect2(game.tile_src(sprite_index)))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var top := -h   # 머리 꼭대기
 	# 전직 단계 표시 (발밑 금색 점)
 	for i in tier:
 		draw_rect(Rect2(-3 + i * 2, 2, 1, 1), Color("ffd84a"))
 	# 레전더리 반짝임
 	if grade == 3 and int(bob * 0.5) % 4 == 0:
-		draw_rect(Rect2(5, -16 + hop, 1, 1), Color.WHITE)
-		draw_rect(Rect2(-6, -11 + hop, 1, 1), gcol)
+		draw_rect(Rect2(6, top + 1, 1, 1), Color.WHITE)
+		draw_rect(Rect2(-7, top + 6, 1, 1), gcol)
 	if game.selected == self:
-		draw_rect(Rect2(-9, -18, 18, 20), Color(1, 0.95, 0.4), false, 1.0)
+		draw_rect(Rect2(-9, top - 2, 18, h + 4), Color(1, 0.95, 0.4), false, 1.0)
 	if hp < max_hp:
-		draw_rect(Rect2(-6, -20, 12, 2), Color(0.1, 0.1, 0.1))
-		draw_rect(Rect2(-6, -20, floorf(12.0 * hp / max_hp), 2), Color("5ad05a"))
+		draw_rect(Rect2(-6, top - 4, 12, 2), Color(0.1, 0.1, 0.1))
+		draw_rect(Rect2(-6, top - 4, floorf(12.0 * hp / max_hp), 2), Color("5ad05a"))
 	if flash_t > 0.0:
 		draw_line(Vector2(0, -8), flash_to + Vector2(0, -6), flash_color, 1.0)
 	if splash_t > 0.0:
@@ -509,10 +534,18 @@ func _draw() -> void:
 	var f: Font = game.font_s
 	# 이름은 항상 머리 위에 (등급 색). 체력바 바로 위.
 	var name_col: Color = gcol if grade > 0 else Color(0.95, 0.92, 0.85)
-	_label(f, merc_name, -21, name_col)
+	# 가까이 붙은 동료가 앞에 있으면 이름을 한 칸씩 위로 쌓는다
+	var stack := 0
+	for other in game.mercs:
+		if other == self:
+			break
+		if not other.downed and absf(other.position.x - position.x) < 22.0 and absf(other.position.y - position.y) < 10.0:
+			stack += 1
+	top -= mini(stack, 3) * 8
+	_label(f, merc_name, top - 5, name_col)
 	# 행동 이름은 선택했을 때와 위급 상태일 때만, 이름 위에 (겹침 방지)
 	if game.selected == self or activity in ["후퇴", "친구 구출", "배고픔", "치유"]:
-		_label(f, activity, -29, Color(1, 1, 1, 0.85))
+		_label(f, activity, top - 13, Color(1, 1, 1, 0.85))
 
 
 func _label(f: Font, text: String, y: float, col: Color) -> void:

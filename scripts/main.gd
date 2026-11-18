@@ -295,7 +295,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var picked = null
 	var best := 12.0
 	for m in mercs:
-		var d: float = (m.position + Vector2(0, -7)).distance_to(p)
+		var d: float = (m.position + Vector2(0, -9)).distance_to(p)
 		if d < best:
 			best = d
 			picked = m
