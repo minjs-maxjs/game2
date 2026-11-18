@@ -1,5 +1,5 @@
 extends Control
-## 작은 픽셀 막대 하나. 육성 창 능력치 줄(stat_panel.gd)과 쪼꼬미 머리 위 HP 바(mercenary.gd)가 같이 쓴다.
+## 작은 픽셀 막대 하나. 육성 창 능력치 줄(stat_panel.gd)과 미니용사 머리 위 HP 바(mercenary.gd)가 같이 쓴다.
 ## Control로 놓아 쓰거나, 다른 CanvasItem의 _draw에서 StatBar.draw_bar(self, ...)로 그린다.
 
 const COL_BACK := Color("2a1d14")

@@ -33,7 +33,7 @@ func _process(_delta: float) -> bool:
 			main._on_recruit()
 		if main.wood >= 20 and main.hall_hp < main.HALL_MAX_HP - 80:
 			main._on_repair()
-		main.deployment.auto_deploy()   # 새로 온 쪼꼬미까지 매일 배치
+		main.deployment.auto_deploy()   # 새로 온 미니용사까지 매일 배치
 	# 건물·나무 안에 서 있는 유닛 수 (길찾기 검증)
 	for u in main.mercs + main.monsters:
 		if is_instance_valid(u):

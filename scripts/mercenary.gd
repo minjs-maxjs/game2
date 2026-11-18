@@ -1,5 +1,5 @@
 extends Node2D
-## 쪼꼬미 용병
+## 미니용사 용병
 ## 태어날 때 직업 · 능력치(근력/민첩/지능/체질/정신) · 등급 · 성격이 정해진다.
 ## 낮에는 욕구와 성격으로 행동을 고르고(유틸리티 AI), 밤에는 직업의 전투 방식대로 싸운다.
 
@@ -18,7 +18,7 @@ const FX := {
 	"heal": ["fx_heal", 22, 3, 0.4],
 }
 const BOLT_TIME := 0.16
-## 후퇴한 쪼꼬미는 체력이 이만큼 찰 때까지 여관에 있는다 (기준 넘자마자 뛰쳐나가는 왕복 방지).
+## 후퇴한 미니용사는 체력이 이만큼 찰 때까지 여관에 있는다 (기준 넘자마자 뛰쳐나가는 왕복 방지).
 const RETREAT_UNTIL := 0.7
 
 ## 성별마다 이름 목록이 따로 있다. 다 쓰면 겹쳐도 된다.
@@ -644,7 +644,7 @@ func _draw() -> void:
 		draw_rect(Rect2(-7, top + 6, 1, 1), gcol)
 	if game.selected == self:
 		draw_rect(Rect2(-9, top - 2, 18, h + 4), Color(1, 0.95, 0.4), false, 1.0)
-	# HP 바: 이름표 아래. 다친 쪼꼬미만, 밤(전투)이나 선택했을 때만.
+	# HP 바: 이름표 아래. 다친 미니용사만, 밤(전투)이나 선택했을 때만.
 	if hp < max_hp and (game.is_night or game.selected == self):
 		var r := hp / max_hp
 		StatBar.draw_bar(self, Rect2(-6, top - 4, 12, 2), r, StatBar.hp_color(r))

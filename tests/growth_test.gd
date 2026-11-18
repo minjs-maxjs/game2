@@ -160,7 +160,7 @@ func _process(_delta: float) -> bool:
 		var end: Vector2 = pts[pts.size() - 1] if pts.size() > 0 else r
 		check(main.hall_rect.grow(10.0 + 6.0 * 0.5).has_point(end), "균열 %s → 영주관 공격 가능 (끝 %s)" % [r, end])
 
-	# 10) 배치: 클릭 → 16px 칸에 스냅, 막힌 곳·HUD 거부, 같은 쪼꼬미 다시 클릭 → 해제
+	# 10) 배치: 클릭 → 16px 칸에 스냅, 막힌 곳·HUD 거부, 같은 미니용사 다시 클릭 → 해제
 	var dep = main.deployment
 	var km = null
 	for o in main.mercs:
@@ -177,9 +177,9 @@ func _process(_delta: float) -> bool:
 	var cell = km.post_pos
 	check(dep.handle_click(Vector2(100, 10), null) and km.post_pos == cell, "HUD 윗줄(보일 때)은 배치 거부")
 	check(dep.handle_click(main.buildings["hall"]["pos"], null) and km.post_pos == cell, "건물(막힌 칸)은 배치 거부")
-	check(dep.handle_click(km.position, km) and km.post_pos == null, "같은 쪼꼬미를 다시 누르면 배치 해제")
+	check(dep.handle_click(km.position, km) and km.post_pos == null, "같은 미니용사를 다시 누르면 배치 해제")
 
-	# 11) 밤: 배치된 쪼꼬미는 leash 밖으로 쫓아가지 않는다
+	# 11) 밤: 배치된 미니용사는 leash 밖으로 쫓아가지 않는다
 	km.post_pos = dep._free_cell(spot, {})
 	var post: Vector2 = dep.cell_center(km.post_pos)
 	km.position = post
@@ -270,7 +270,7 @@ func _process(_delta: float) -> bool:
 	main._on_speed()
 	Engine.time_scale = 1.0
 
-	# 15) (a) 성 위기: 영주관 옆 마물 → 멀리 배치된 쪼꼬미가 떠나 접근, 위기가 끝나면 복귀
+	# 15) (a) 성 위기: 영주관 옆 마물 → 멀리 배치된 미니용사가 떠나 접근, 위기가 끝나면 복귀
 	km.post_pos = main.cell_of(night_post)
 	km.position = night_post
 	km.hp = km.max_hp
@@ -379,7 +379,7 @@ func _process(_delta: float) -> bool:
 			split_ok = false
 	check(split_ok, "파도 분할 합계 = 밤 총수 (1~15일, 예: 3일 %s)" % str(WD.wave_sizes(3)))
 	check(WD.night_total_for(4) == roundi((3 + 4 * 2) * 0.8), "쉬운 밤은 x0.8 (4일 %d마리)" % WD.night_total_for(4))
-	# 파도 사이 휴식: 마물이 나오지 않고, 쪼꼬미는 회복하며, 후퇴 중이면 기준을 넘으면 복귀
+	# 파도 사이 휴식: 마물이 나오지 않고, 미니용사는 회복하며, 후퇴 중이면 기준을 넘으면 복귀
 	main.day = 3
 	main._start_night()
 	main.monsters.clear()
@@ -415,7 +415,7 @@ func _process(_delta: float) -> bool:
 		check(wm.hp > hp0 + wm.max_hp * 0.2, "휴식 중 체력 회복 (%.0f → %.0f)" % [hp0, wm.hp])
 		wm.hp = wm.max_hp * 0.75
 		wm._night(1.0 / 60.0)
-		check(not wm.retreating, "후퇴 중 쪼꼬미가 기준을 넘으면 복귀")
+		check(not wm.retreating, "후퇴 중 미니용사가 기준을 넘으면 복귀")
 		for i in 60:
 			dir.update_night(1.0 / 60.0)
 		check(not dir.resting and dir.wave_idx == wave + 1, "휴식이 끝나면 %d파도" % (wave + 2))
@@ -454,7 +454,7 @@ func _process(_delta: float) -> bool:
 	main._start_dawn()
 	wh.refresh()
 	var sum_text: String = dir.panel.summary_label.text
-	check(not wh.banner.visible and sum_text.begins_with("3일차 방어 성공 — 처치 ") and sum_text.contains("쓰러진 쪼꼬미") and sum_text.contains("영주관 -"),
+	check(not wh.banner.visible and sum_text.begins_with("3일차 방어 성공 — 처치 ") and sum_text.contains("쓰러진 미니용사") and sum_text.contains("영주관 -"),
 		"새벽 요약: %s" % sum_text.replace("
 ", " / "))
 	dir.continue_day()
@@ -531,9 +531,9 @@ func _process(_delta: float) -> bool:
 	check(zooms_ok and cam.zoom_level == 2, "확대 배율은 정수(2·3)로만 바뀐다")
 	# Q/E 전환, Tab, 해제
 	cam.cycle(1)
-	check(cam.target == main.mercs[1], "E: 다음 쪼꼬미")
+	check(cam.target == main.mercs[1], "E: 다음 미니용사")
 	cam.cycle(-1)
-	check(cam.target == fm, "Q: 이전 쪼꼬미")
+	check(cam.target == fm, "Q: 이전 미니용사")
 	main.toggle_hud()
 	check(not cam.info_panel.is_visible_in_tree() and cam.is_following(), "Tab: HUD를 숨겨도 따라가기 유지")
 	main.toggle_hud()

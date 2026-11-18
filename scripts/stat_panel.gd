@@ -2,7 +2,7 @@ extends Control
 ## 육성 창의 능력치 5종: "이름  [바]  숫자  +n" 한 줄씩.
 ## - 바 = 현재 값 / 등급별 능력치 상한 (JobData.stat_cap), 테두리는 등급 색
 ## - 다음 전직에 조건이 있는 능력치는 바 위에 목표 눈금, 숫자는 미달 빨강 · 충족 초록
-## - 같은 쪼꼬미를 보고 있는 동안 값이 오르면 "+n"을 잠깐 띄운다
+## - 같은 미니용사를 보고 있는 동안 값이 오르면 "+n"을 잠깐 띄운다
 
 const StatBar = preload("res://scripts/stat_bar.gd")
 const JobData = preload("res://scripts/job_data.gd")
@@ -47,7 +47,7 @@ func setup(f: Font) -> void:
 		_bars[JobData.STATS[i]] = b
 
 
-## 매 프레임 불러도 된다. 다른 쪼꼬미로 바뀌면 "+n" 기록을 지운다.
+## 매 프레임 불러도 된다. 다른 미니용사로 바뀌면 "+n" 기록을 지운다.
 func show_merc(m) -> void:
 	if m != _merc:
 		_merc = m

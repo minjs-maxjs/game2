@@ -1,5 +1,5 @@
 extends RefCounted
-## 쪼꼬미 외형: Super Retro World Character Pack (Gif · Noiracide · Romi)
+## 미니용사 외형: Super Retro World Character Pack (Gif · Noiracide · Romi)
 ##
 ## 라이선스상 에셋을 재배포할 수 없어 저장소에 넣지 않는다(.gitignore).
 ## 팩 폴더가 있으면 그 그림을, 없으면 Kenney 스프라이트로 대신 그린다.

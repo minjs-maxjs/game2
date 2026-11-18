@@ -44,7 +44,7 @@ var elapsed := 0.0
 var deployment: Deployment
 var director: WaveDirector   # 밤 파도 · 휴식 · 새벽 정산
 var wave_hud: WaveHud         # 상단 일차·웨이브 배너, 밤 시작 연출
-var follow_cam: FollowCam     # 쪼꼬미 따라가기 (꺼져 있으면 화면 변환 없음)
+var follow_cam: FollowCam     # 미니용사 따라가기 (꺼져 있으면 화면 변환 없음)
 var selected = null
 
 ## pos: 건물 중심, spot: 용병이 모이는 자리, spread: 모이는 범위, label: 이름표 위치
@@ -206,7 +206,7 @@ func _spawn_merc(forced_job: String = "") -> void:
 	mercs.append(m)
 	add_log("[%s] %s(%s) 합류." % [m.grade_info()["name"], m.merc_name, m.title()])
 	if m.grade == JobData.GRADES.size() - 1:
-		_show_banner("레전더리 쪼꼬미 %s 탄생!" % m.merc_name)
+		_show_banner("레전더리 미니용사 %s 탄생!" % m.merc_name)
 
 
 func _spawn_monster(elite: bool) -> void:
@@ -332,7 +332,7 @@ func world_to_screen(w: Vector2) -> Vector2:
 	return get_canvas_transform() * w
 
 
-## 맵 좌표 p에서 클릭으로 고를 쪼꼬미 (없으면 null).
+## 맵 좌표 p에서 클릭으로 고를 미니용사 (없으면 null).
 func merc_at(p: Vector2):
 	var picked = null
 	var best := 12.0
@@ -434,7 +434,7 @@ func try_promote(m) -> bool:
 	return true
 
 
-## 방출: 쪼꼬미를 영지에서 내보낸다. 되돌릴 수 없다.
+## 방출: 미니용사를 영지에서 내보낸다. 되돌릴 수 없다.
 func dismiss_merc(m) -> void:
 	if not mercs.has(m):
 		return
@@ -758,7 +758,7 @@ func _update_hud() -> void:
 	if selected != null and is_instance_valid(selected):
 		info_label.text = selected.describe()
 	else:
-		info_label.text = "쪼꼬미 클릭: 육성 창 · 고른 뒤 맵 클릭: 배치\nSPACE 배속 · 우클릭 선택 해제 · Tab HUD 숨김"
+		info_label.text = "미니용사 클릭: 육성 창 · 고른 뒤 맵 클릭: 배치\nSPACE 배속 · 우클릭 선택 해제 · Tab HUD 숨김"
 	_update_growth_panel()
 
 
