@@ -63,12 +63,15 @@ docs/기획서_v0.4.md     게임 기획서
 | Tiny Town, Tiny Dungeon (`assets/kenney_*`) | Kenney (kenney.nl) | CC0 |
 | 갈무리 Galmuri7/9/11 (`assets/fonts`) | 이민서 (quiple) | SIL OFL 1.1 |
 | Super Retro World Character Pack (쪼꼬미 외형) | Gif (@gif_not_jif), Noiracide (@Noiracide), Romi (@DessRomaric) | 상업 이용 가능 · 저작자 표시 필수 · **재배포 금지** |
+| Super Retro World Exterior Pack 무료판 (바닥·길·나무·소품) | Gif, Noiracide, Romi (위와 같음) | 위와 같음 |
+| 영주관·여관·식당 (`assets/agra`) | 프로젝트 자체 제작 (AI 생성 이미지를 16px로 변환) | 프로젝트 소유 |
 
-### 쪼꼬미 캐릭터 팩 넣기
+### Super Retro World 팩 넣기
 
 Super Retro World Character Pack은 라이선스상 재배포할 수 없어 저장소에 없다.
 [itch.io](https://gif-superretroworld.itch.io/)에서 받아 프로젝트 루트에 `SuperRetroWorld_CharacterPack_Full/` 그대로 풀면 된다
-(`.gitignore`에 등록됨). 팩이 없으면 쪼꼬미는 Kenney 스프라이트로 그려진다.
+(`.gitignore`에 등록됨). Exterior 무료판도 같은 상점에서 받아 `exterior-pack-free_version/`으로 풀면 된다.
+팩이 없으면 쪼꼬미와 맵 바닥은 Kenney 그림으로 그려진다. 맵 타일 배정은 `scripts/map_art.gd`.
 캐릭터 번호별 성별·직업 배정은 `scripts/char_sprites.gd`의 `CHARS`.
 
 정식 아트로 바꿀 때는 `assets/`의 타일시트를 같은 16×16 격자로 교체하면 된다.

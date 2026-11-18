@@ -6,6 +6,7 @@ extends Node2D
 const Mercenary = preload("res://scripts/mercenary.gd")
 const Monster = preload("res://scripts/monster.gd")
 const JobData = preload("res://scripts/job_data.gd")
+const MapArt = preload("res://scripts/map_art.gd")
 const TOWN_TEX := preload("res://assets/kenney_tiny_town/tilemap_packed.png")
 const DUNGEON_TEX := preload("res://assets/kenney_tiny_dungeon/tilemap_packed.png")
 
@@ -44,7 +45,7 @@ var selected = null
 
 ## pos: 건물 중심, spot: 용병이 모이는 자리, spread: 모이는 범위, label: 이름표 위치
 var buildings: Dictionary = {
-	"hall": {"name": "영주관", "pos": Vector2(272, 184), "spot": Vector2(272, 226), "spread": Vector2(40, 5), "label": Vector2(272, 150)},
+	"hall": {"name": "영주관", "pos": Vector2(272, 184), "spot": Vector2(272, 226), "spread": Vector2(40, 5), "label": Vector2(272, 140)},
 	"inn": {"name": "여관", "pos": Vector2(152, 88), "spot": Vector2(152, 124), "spread": Vector2(18, 4), "label": Vector2(152, 58)},
 	"mess": {"name": "식당", "pos": Vector2(392, 88), "spot": Vector2(392, 124), "spread": Vector2(18, 4), "label": Vector2(392, 58)},
 	"training": {"name": "훈련장", "pos": Vector2(152, 240), "spot": Vector2(152, 266), "spread": Vector2(30, 3), "label": Vector2(152, 220)},
@@ -689,22 +690,24 @@ func _stamp_block(img: Image, src: Image, rows: Array, tx: int, ty: int) -> void
 			_stamp(img, src, row[c], tx + c, ty + r)
 
 
-func _compose_static() -> void:
-	var src: Image = TOWN_TEX.get_image()
-	if src.is_compressed():
-		src.decompress()
-	src.convert(Image.FORMAT_RGBA8)
-	var img := Image.create(int(WORLD_SIZE.x), int(WORLD_SIZE.y), false, Image.FORMAT_RGBA8)
-	var h := RandomNumberGenerator.new()
-	h.seed = 7
-	# 잔디
-	for ty in 23:
-		for tx in 40:
-			var roll := h.randf()
-			_stamp(img, src, 2 if roll < 0.05 else (1 if roll < 0.2 else 0), tx, ty)
-	# 길 (징검돌)
+## 영주관·여관·식당 (assets/agra, 자체 그림). 발밑 가운데를 건물 칸 묶음의 아래 가운데에 맞춘다.
+## 영주관은 성벽이 한 줄 위로 솟아서 그 줄도 막는다.
+func _place_buildings(img: Image, blocked: Array[Vector2i]) -> void:
+	for b in [["inn", Rect2i(8, 4, 3, 3)], ["mess", Rect2i(23, 4, 3, 3)], ["hall", Rect2i(14, 10, 6, 3)]]:
+		var art: Image = MapArt.own(b[0])
+		var r: Rect2i = b[1]
+		var foot := Vector2i(int((r.position.x + r.size.x / 2.0) * TILE), r.end.y * TILE)
+		img.blend_rect(art, Rect2i(Vector2i.ZERO, art.get_size()), foot - Vector2i(art.get_width() / 2, art.get_height()))
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				blocked.append(Vector2i(x, y))
+	for x in range(14, 20):
+		blocked.append(Vector2i(x, 9))
+
+
+## 큰길·샛길 칸 (길찾기 비용 1). 그림과 상관없이 같은 배치.
+func _road_cells() -> Array[Vector2i]:
 	var path: Array[Vector2i] = []
-	var blocked: Array[Vector2i] = []
 	for x in range(1, 27):
 		path.append(Vector2i(x, 8))
 	for x in range(12, 22):
@@ -718,6 +721,112 @@ func _compose_static() -> void:
 		path.append(Vector2i(9, y))
 	for y in range(9, 13):
 		path.append(Vector2i(26, y))
+	return path
+
+
+## Super Retro World 무료판으로 마을을 그린다. 배치는 Kenney판과 같다.
+func _compose_srw() -> void:
+	var img := Image.create(int(WORLD_SIZE.x), int(WORLD_SIZE.y), false, Image.FORMAT_RGBA8)
+	var h := RandomNumberGenerator.new()
+	h.seed = 7
+	var blocked: Array[Vector2i] = []
+	for ty in 23:
+		for tx in 40:
+			MapArt.grass(img, tx, ty)
+	var path := _road_cells()
+	# 돌길 + 광장 (광장은 길과 이어 붙여 한 덩어리)
+	var cobble: Array = path.duplicate()
+	for y in range(5, 8):
+		for x in range(15, 20):
+			cobble.append(Vector2i(x, y))
+	MapArt.autotile(img, "cobble", cobble)
+	# 밭: 흙 5x3 + 작물
+	var farm: Array = []
+	for y in range(13, 16):
+		for x in range(23, 28):
+			farm.append(Vector2i(x, y))
+	MapArt.autotile(img, "dirt", farm)
+	for x in range(24, 27):
+		MapArt.prop(img, "tuft_a" if x % 2 == 0 else "tuft_b", x, 14)
+	MapArt.prop(img, "post", 29, 13)
+	MapArt.prop(img, "post", 29, 15)
+	blocked.append_array([Vector2i(29, 13), Vector2i(29, 15)])
+	# 광장: 가운데 가로등, 양옆 벤치
+	MapArt.prop(img, "lamp", 17, 6)
+	MapArt.prop(img, "bench", 15, 5)
+	MapArt.prop(img, "bench", 18, 5)
+	blocked.append_array([Vector2i(17, 6), Vector2i(17, 5)])
+	# 식당 옆 통, 여관 옆 표지판
+	MapArt.prop(img, "barrel", 26, 6)
+	MapArt.prop(img, "bucket", 26, 5)
+	MapArt.prop(img, "sign", 11, 7)
+	blocked.append_array([Vector2i(26, 6), Vector2i(26, 5)])
+	# 훈련장: 울타리 + 허수아비 대신 말뚝, 상자
+	MapArt.prop(img, "fence_l", 7, 14)
+	for x in range(8, 11):
+		MapArt.prop(img, "fence_m", x, 14)
+	MapArt.prop(img, "fence_r", 11, 14)
+	for x in range(7, 12):
+		blocked.append(Vector2i(x, 14))
+	MapArt.prop(img, "post", 8, 15)
+	MapArt.prop(img, "post", 10, 15)
+	MapArt.prop(img, "crate", 6, 15)
+	blocked.append_array([Vector2i(8, 15), Vector2i(10, 15), Vector2i(6, 15)])
+	# 숲: 큰 나무(2x2)와 소나무를 엇갈려
+	for ty in range(3, 8, 2):
+		for tx in range(0, 6, 2):
+			if ty >= 6 and tx >= 4:
+				continue
+			if h.randf() < 0.75:
+				MapArt.prop(img, "tree_big", tx, ty)
+				for c in [Vector2i(tx, ty), Vector2i(tx + 1, ty), Vector2i(tx, ty - 1), Vector2i(tx + 1, ty - 1)]:
+					blocked.append(c)
+			else:
+				MapArt.prop(img, "pine", tx, ty)
+				MapArt.prop(img, "bush", tx + 1, ty)
+				blocked.append_array([Vector2i(tx, ty), Vector2i(tx, ty - 1), Vector2i(tx + 1, ty)])
+	# 가장자리 나무
+	for p in [Vector2i(32, 9), Vector2i(31, 16), Vector2i(4, 11), Vector2i(2, 14), Vector2i(19, 16),
+			Vector2i(13, 2), Vector2i(29, 3), Vector2i(21, 3), Vector2i(33, 12), Vector2i(15, 16)]:
+		var k: String = ["pine", "pine", "bush"][h.randi() % 3]
+		MapArt.prop(img, k, p.x, p.y)
+		blocked.append(p)
+	_place_buildings(img, blocked)
+	# 풀밭 장식 (지나갈 수 있음): 꽃·풀포기·작은 돌
+	var taken := {}
+	for c in cobble + farm + blocked:
+		taken[c] = true
+	for ty in range(1, 23):
+		for tx in 40:
+			var c := Vector2i(tx, ty)
+			if taken.has(c) or h.randf() > 0.07:
+				continue
+			if Rect2i(7, 3, 5, 5).has_point(c) or Rect2i(22, 2, 5, 6).has_point(c) or Rect2i(13, 8, 8, 6).has_point(c):
+				continue   # 건물 그림 위에는 안 놓는다
+			MapArt.prop(img, ["flower_w", "flower_r", "tuft_a", "tuft_b", "rock_s"][h.randi() % 5], tx, ty)
+	static_tex = ImageTexture.create_from_image(img)
+	_build_nav(path, blocked)
+
+
+func _compose_static() -> void:
+	if MapArt.available():
+		_compose_srw()
+		return
+	var src: Image = TOWN_TEX.get_image()
+	if src.is_compressed():
+		src.decompress()
+	src.convert(Image.FORMAT_RGBA8)
+	var img := Image.create(int(WORLD_SIZE.x), int(WORLD_SIZE.y), false, Image.FORMAT_RGBA8)
+	var h := RandomNumberGenerator.new()
+	h.seed = 7
+	# 잔디
+	for ty in 23:
+		for tx in 40:
+			var roll := h.randf()
+			_stamp(img, src, 2 if roll < 0.05 else (1 if roll < 0.2 else 0), tx, ty)
+	# 길 (징검돌)
+	var path := _road_cells()
+	var blocked: Array[Vector2i] = []
 	for cell in path:
 		_stamp(img, src, 43, cell.x, cell.y)
 	# 광장과 우물
@@ -736,16 +845,8 @@ func _compose_static() -> void:
 		Vector2i(8, 15), Vector2i(10, 15)])
 	for x in range(7, 12):
 		blocked.append(Vector2i(x, 14))
-	for r in [Rect2i(8, 4, 3, 3), Rect2i(23, 4, 3, 3), Rect2i(14, 10, 6, 3)]:
-		for y in range(r.position.y, r.end.y):
-			for x in range(r.position.x, r.end.x):
-				blocked.append(Vector2i(x, y))
 	# 건물
-	_stamp_block(img, src, [[52, 53, 54], [64, 67, 66], [88, 89, 91]], 8, 4)    # 여관
-	_stamp_block(img, src, [[48, 49, 50], [60, 63, 62], [84, 85, 87]], 23, 4)   # 식당
 	_stamp(img, src, 83, 26, 6)
-	_stamp_block(img, src, [[96, 97, 97, 97, 97, 98], [108, 109, 109, 109, 109, 110],
-		[126, 125, 111, 112, 125, 126]], 14, 10)                                  # 영주관
 	# 훈련장
 	_stamp_block(img, src, [[44, 45, 45, 45, 46]], 7, 14)
 	_stamp(img, src, 95, 8, 15)
@@ -766,6 +867,7 @@ func _compose_static() -> void:
 			Vector2i(13, 2), Vector2i(29, 3), Vector2i(21, 3), Vector2i(33, 12), Vector2i(15, 16)]:
 		_stamp(img, src, [16, 28, 15, 27, 5][h.randi() % 5], p.x, p.y)
 		blocked.append(p)
+	_place_buildings(img, blocked)
 	static_tex = ImageTexture.create_from_image(img)
 	_build_nav(path, blocked)
 
@@ -788,7 +890,7 @@ func _draw() -> void:
 		var b: Dictionary = buildings[key]
 		_draw_text(b["label"], b["name"], font_m, 10)
 	# 영주관 내구도
-	var bar := Rect2(240, 154, 64, 3)
+	var bar := Rect2(240, 143, 64, 3)
 	draw_rect(bar.grow(1), COL_DARK)
 	draw_rect(Rect2(bar.position, Vector2(floorf(bar.size.x * hall_hp / HALL_MAX_HP), bar.size.y)), Color("e05a4a"))
 	# 집결 지점
