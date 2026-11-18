@@ -3,3 +3,9 @@
 *.translation
 export_presets.cfg
 /build/
+
+# graphify: 공유할 산출물만 커밋
+graphify-out/cache/
+graphify-out/cost.json
+graphify-out/.graphify_python
+graphify-out/.graphify_root

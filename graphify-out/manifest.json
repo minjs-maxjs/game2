@@ -1,0 +1,74 @@
+{
+  "README.md": {
+    "mtime": 1794964949.2840705,
+    "seen": 1794965319.2502542,
+    "ast_hash": "17660a110599f0d92263629c0ca7b58c",
+    "semantic_hash": "17660a110599f0d92263629c0ca7b58c"
+  },
+  "docs/\uae30\ud68d\uc11c_v0.4.md": {
+    "mtime": 1794964942.1269484,
+    "seen": 1794965319.2502542,
+    "ast_hash": "76dc22b08feeb4d93504aa00234f430b",
+    "semantic_hash": "76dc22b08feeb4d93504aa00234f430b"
+  },
+  "project.godot": {
+    "mtime": 1794898924.494473,
+    "seen": 1794965319.2502542,
+    "ast_hash": "88887fde407ebd07dbce0fd42bc08b8b",
+    "semantic_hash": "88887fde407ebd07dbce0fd42bc08b8b"
+  },
+  "scenes/main.tscn": {
+    "mtime": 1794897345.9107294,
+    "seen": 1794965319.2502542,
+    "ast_hash": "1b7d9a40e027f02e358c3e5e7ffc2d65",
+    "semantic_hash": "1b7d9a40e027f02e358c3e5e7ffc2d65"
+  },
+  "scripts/job_data.gd": {
+    "mtime": 1794964671.6731012,
+    "seen": 1794965319.2502542,
+    "ast_hash": "b6f79a623ce3ed32b3c1d17a5220fc5d",
+    "semantic_hash": "b6f79a623ce3ed32b3c1d17a5220fc5d"
+  },
+  "scripts/main.gd": {
+    "mtime": 1794964898.0250914,
+    "seen": 1794965319.2502542,
+    "ast_hash": "716a5f50932a8e10adf24b134239578d",
+    "semantic_hash": "716a5f50932a8e10adf24b134239578d"
+  },
+  "scripts/mercenary.gd": {
+    "mtime": 1794964730.9023716,
+    "seen": 1794965319.2502542,
+    "ast_hash": "dde0d4a94e2459fd6a4e5532bd0e1027",
+    "semantic_hash": "dde0d4a94e2459fd6a4e5532bd0e1027"
+  },
+  "scripts/monster.gd": {
+    "mtime": 1794964747.5699177,
+    "seen": 1794965319.2502542,
+    "ast_hash": "f85a44749d0d108a3e1a8054eb783b7e",
+    "semantic_hash": "f85a44749d0d108a3e1a8054eb783b7e"
+  },
+  "scripts/summon.gd": {
+    "mtime": 1794964746.9681933,
+    "seen": 1794965319.2502542,
+    "ast_hash": "15d4e6236e26709b6781fdd54cea1b97",
+    "semantic_hash": "15d4e6236e26709b6781fdd54cea1b97"
+  },
+  "tests/growth_test.gd": {
+    "mtime": 1794964849.037703,
+    "seen": 1794965319.2502542,
+    "ast_hash": "9d0b7da6102620b403f447aaca4f6cb5",
+    "semantic_hash": "9d0b7da6102620b403f447aaca4f6cb5"
+  },
+  "tests/screenshot.gd": {
+    "mtime": 1794964868.6397333,
+    "seen": 1794965319.2502542,
+    "ast_hash": "747895b3deddfa1b9b21035a2d4a9bff",
+    "semantic_hash": "747895b3deddfa1b9b21035a2d4a9bff"
+  },
+  "tests/smoke_test.gd": {
+    "mtime": 1794899423.1328137,
+    "seen": 1794965319.2502542,
+    "ast_hash": "48d00d6485f40c584d55d3bcc246d302",
+    "semantic_hash": "48d00d6485f40c584d55d3bcc246d302"
+  }
+}

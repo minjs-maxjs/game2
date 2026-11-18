@@ -1,0 +1,40 @@
+# 아그라 전기 — 작업 지침
+
+Godot 4.7 / GDScript 탑다운 픽셀 게임. 기획은 `docs/기획서_v0.4.md`.
+
+## 코드 찾기: 전체를 훑지 말고 지도부터
+
+1. **`graphify-out/CODEMAP.md`** 를 먼저 본다. 파일별로 함수·상수의 줄 번호, 한 줄 요약, 기능 묶음, 호출 관계가 있다.
+   고칠 심볼을 찾으면 그 줄 주변만 `Read`(offset/limit)로 읽는다.
+2. 기능이 여러 파일에 걸치면 **`graphify-out/GRAPH_REPORT.md`** 의 Hyperedges(낮밤 순환, 육성/전직, 길찾기, 전투 피해 흐름)를 본다.
+3. 연결 관계를 따라가야 하면 `graphify query "<질문>"` 또는 `graphify path "A" "B"` (프로젝트 루트에서).
+
+기능 묶음 → 주로 볼 파일:
+| 묶음 | 위치 |
+|---|---|
+| 낮밤 순환 · 웨이브 · 자원 | `scripts/main.gd` (_process, _start_night, _update_night, _start_day) |
+| HUD · 마을 명령 버튼 | `scripts/main.gd` (_build_hud, _on_* 콜백, add_log) |
+| 육성 창 · 전직 · 방출 | `scripts/main.gd` (select, try_promote, dismiss_merc, _growth_bbcode) + `scripts/mercenary.gd` (gain_xp, promote, recalc) |
+| 직업 · 등급 · 능력치 표 | `scripts/job_data.gd` (새 직업은 JOBS에 한 줄 추가) |
+| 쪼꼬미 생활 AI · 전투 | `scripts/mercenary.gd` (_day, _choose_action, _night, _attack, _try_heal) |
+| 마물 · 소환수 | `scripts/monster.gd`, `scripts/summon.gd` |
+| 맵 · 길찾기 | `scripts/main.gd` (_compose_static, _build_nav, find_path, is_walkable) |
+
+## 그래프 갱신 (코드를 고친 뒤)
+
+graphify에는 GDScript 파서가 없다. `.gd`는 detect 단계에서 자동으로 잡히지 않으므로,
+`/graphify --update` 를 돌릴 때 corpus를 직접 지정해야 한다:
+`scripts/*.gd`, `tests/*.gd`, `README.md`, `docs/기획서_v0.4.md`, `project.godot`, `scenes/main.tscn`
+(이미지·라이선스 파일은 제외). `.gd`는 문서로 취급되어 서브에이전트가 읽고, 함수마다 `L<줄>` 위치를 기록한다.
+갱신 후 `python tools/make_codemap.py` 로 CODEMAP.md를 다시 만든다.
+
+줄 번호가 몇 줄 어긋난 정도라면 그래프를 다시 만들지 말고 `Grep`으로 `func 이름`을 찾으면 된다.
+
+## 검증
+
+```
+godot --headless --path . --script res://tests/growth_test.gd
+godot --headless --path . --fixed-fps 60 --script res://tests/smoke_test.gd
+godot --path . --script res://tests/screenshot.gd -- <출력폴더>
+```
+이 PC의 Godot: `D:\PYthon프로그램들\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64_console.exe`
