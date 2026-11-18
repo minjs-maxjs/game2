@@ -135,9 +135,10 @@ func is_placeable(p: Vector2) -> bool:
 	return Rect2(Vector2.ZERO, game.WORLD_SIZE).has_point(p) and game.is_walkable(p)
 
 
-## p에 마우스를 받는 HUD 컨트롤이 있는가 (보이는 것 중 mouse_filter가 IGNORE가 아닌 것).
+## 맵 좌표 p를 화면에서 마우스를 받는 HUD 컨트롤이 가리는가 (보이는 것 중 mouse_filter가 IGNORE가 아닌 것).
+## HUD는 화면 좌표라서 따라가기 카메라의 확대·이동을 반영해 바꿔서 잰다.
 func ui_blocks(p: Vector2) -> bool:
-	return game.hud_root != null and _blocks(game.hud_root, p)
+	return game.hud_root != null and _blocks(game.hud_root, game.world_to_screen(p))
 
 
 func _blocks(c: Control, p: Vector2) -> bool:

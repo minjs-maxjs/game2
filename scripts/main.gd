@@ -11,6 +11,7 @@ const Deployment = preload("res://scripts/deployment.gd")
 const StatPanel = preload("res://scripts/stat_panel.gd")
 const WaveDirector = preload("res://scripts/wave_director.gd")
 const WaveHud = preload("res://scripts/wave_hud.gd")
+const FollowCam = preload("res://scripts/follow_cam.gd")
 const TOWN_TEX := preload("res://assets/kenney_tiny_town/tilemap_packed.png")
 const DUNGEON_TEX := preload("res://assets/kenney_tiny_dungeon/tilemap_packed.png")
 
@@ -43,6 +44,7 @@ var elapsed := 0.0
 var deployment: Deployment
 var director: WaveDirector   # 밤 파도 · 휴식 · 새벽 정산
 var wave_hud: WaveHud         # 상단 일차·웨이브 배너, 밤 시작 연출
+var follow_cam: FollowCam     # 쪼꼬미 따라가기 (꺼져 있으면 화면 변환 없음)
 var selected = null
 
 ## pos: 건물 중심, spot: 용병이 모이는 자리, spread: 모이는 범위, label: 이름표 위치
@@ -108,6 +110,9 @@ func _ready() -> void:
 	add_child(director)
 	_build_hud()
 	director.setup(self)
+	follow_cam = FollowCam.new()
+	add_child(follow_cam)
+	follow_cam.setup(self)
 	# 시작 편성은 고정: 기사 · 거너 · 힐러 · 마법사. 이후 모집은 직업도 무작위.
 	for job_id in ["knight", "gunner", "healer", "mage"]:
 		_spawn_merc(job_id)
@@ -306,12 +311,29 @@ func _unhandled_input(event: InputEvent) -> void:
 	var mb := event as InputEventMouseButton
 	if mb == null or not mb.pressed:
 		return
-	var p := get_global_mouse_position()
 	if mb.button_index == MOUSE_BUTTON_RIGHT:
 		select(null)
 		return
 	if mb.button_index != MOUSE_BUTTON_LEFT:
 		return
+	var p := screen_to_world(mb.position)
+	var picked = merc_at(p)
+	if deployment.handle_click(p, picked):
+		return
+	select(picked)
+
+
+## 화면(뷰포트) 좌표 ↔ 맵 좌표. 따라가기 카메라의 확대·이동을 반영한다 (클릭 변환은 모두 여기로).
+func screen_to_world(s: Vector2) -> Vector2:
+	return get_canvas_transform().affine_inverse() * s
+
+
+func world_to_screen(w: Vector2) -> Vector2:
+	return get_canvas_transform() * w
+
+
+## 맵 좌표 p에서 클릭으로 고를 쪼꼬미 (없으면 null).
+func merc_at(p: Vector2):
 	var picked = null
 	var best := 12.0
 	for m in mercs:
@@ -319,9 +341,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if d < best:
 			best = d
 			picked = m
-	if deployment.handle_click(p, picked):
-		return
-	select(picked)
+	return picked
 
 
 func _on_recruit() -> void:
@@ -494,6 +514,7 @@ func _build_growth_panel(root: Control) -> void:
 	buttons.append(promote_button)
 	dismiss_button = _add_button(grid, "방출", _on_dismiss)
 	buttons.append(dismiss_button)
+	buttons.append(_add_button(grid, "따라가기 F", func(): follow_cam.toggle_from_selection()))
 	buttons.append(_add_button(grid, "닫기", _on_close_panel))
 	for b in buttons:
 		b.custom_minimum_size = Vector2(79, 20)

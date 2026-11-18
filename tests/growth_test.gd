@@ -460,6 +460,103 @@ func _process(_delta: float) -> bool:
 	dir.continue_day()
 	main.is_night = false
 
+	# 19) 따라가기 카메라: 클릭 좌표 변환 · 쓰러져도 유지 · 정수 배율 · 배속 무관
+	var cam = main.follow_cam
+	main.is_night = false
+	main.select(null)
+	check(not cam.is_following() and main.world_to_screen(Vector2(123, 45)).is_equal_approx(Vector2(123, 45)), "따라가기 꺼짐 = 화면 변환 없음")
+	var fm = main.mercs[0]
+	var dm = main.mercs[1]
+	fm.position = Vector2(120, 250)
+	fm.downed = false
+	main.select(fm)
+	cam.toggle_from_selection()
+	cam.snap()
+	check(cam.is_following() and cam.target == fm and main.selected == null and cam.zoom == Vector2(2, 2), "따라가기 시작: x2, 선택(육성 창)은 닫힘")
+	check(cam.view_rect().position.x >= 0.0 and cam.view_rect().position.y >= 0.0 and cam.view_rect().end.x <= 640.0 and cam.view_rect().end.y <= 360.0,
+		"맵 밖이 보이지 않는다 (%s)" % str(cam.view_rect()))
+	# (a) 확대 중 배치 클릭: 화면 좌표 → 맵 칸
+	var wcell: Vector2 = dep.cell_center(dep._free_cell(fm.position + Vector2(-40, -20), {}))
+	var sp: Vector2 = main.world_to_screen(wcell)
+	check(main.screen_to_world(sp).distance_to(wcell) < 0.01 and sp.distance_to(wcell) > 20.0, "확대 중 화면↔맵 변환 (맵 %s → 화면 %s)" % [wcell, sp])
+	main.select(dm)
+	dm.post_pos = null
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	ev.position = sp
+	main._unhandled_input(ev)
+	check(sp.x < 300.0 and dm.post_pos == main.cell_of(wcell), "확대 중 클릭이 그 칸에 배치 (화면 %s → %s)" % [sp, str(dm.post_pos)])
+	# 같은 맵 칸이라도 화면에서 육성 창이 덮는 곳이면 거부 (판정은 화면 기준)
+	var covered: Vector2 = main.screen_to_world(Vector2(420, 150))
+	dm.post_pos = null
+	check(dep.ui_blocks(covered) and dep.handle_click(covered, null) and dm.post_pos == null, "확대 중 육성 창이 덮은 곳은 거부 (맵 %s)" % covered)
+	# 확대 중 HUD가 가리는 판정은 화면 기준: 화면 아래 로그 패널 밑 맵 칸은 거부
+	var under_log: Vector2 = main.screen_to_world(Vector2(150, 330))
+	check(dep.ui_blocks(under_log) and not dep.ui_blocks(main.screen_to_world(Vector2(150, 200))), "확대 중 화면 아래 로그 패널 밑만 거부 (맵 %s)" % under_log)
+	# 밤: 따라가기만으로는 배속이 바뀌지 않는다 (0.2배는 배치용 선택에만)
+	main.select(null)
+	main.is_night = true
+	Engine.time_scale = 1.0
+	dep._update_slow()
+	check(is_equal_approx(Engine.time_scale, 1.0), "밤에 따라가기 중 배속 그대로 (x%.1f)" % Engine.time_scale)
+	main.select(dm)
+	dep._update_slow()
+	check(is_equal_approx(Engine.time_scale, dep.NIGHT_EDIT_SPEED) and cam.target == fm, "따라가기 중에도 배치용 선택은 0.2배, 따라가기 유지")
+	main.select(null)
+	dep._update_slow()
+	Engine.time_scale = 1.0
+	# (b) 쓰러지거나 후퇴해도 해제되지 않는다
+	fm.take_damage(999999.0)
+	fm.retreating = true
+	for i in 30:
+		cam._process(1.0 / 60.0)
+	check(fm.downed and cam.is_following() and cam.target == fm, "대상이 쓰러져도 따라가기 유지")
+	fm.downed = false
+	fm.hp = fm.max_hp
+	fm.retreating = false
+	# (c) 배율은 정수 2/3만
+	var zooms_ok := true
+	for z in [2.4, 2.6, 7.0, 0.0, -3.0, 3.0, 2.0]:
+		cam.set_zoom_level(z)
+		if cam.zoom.x != float(cam.zoom_level) or not (cam.zoom_level in [2, 3]) or cam.zoom.x != cam.zoom.y:
+			zooms_ok = false
+	var wheel := InputEventMouseButton.new()
+	wheel.pressed = true
+	for b in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_DOWN]:
+		wheel.button_index = b
+		cam._unhandled_input(wheel)
+		if not (cam.zoom_level in [2, 3]) or cam.zoom.x != float(cam.zoom_level):
+			zooms_ok = false
+	check(zooms_ok and cam.zoom_level == 2, "확대 배율은 정수(2·3)로만 바뀐다")
+	# Q/E 전환, Tab, 해제
+	cam.cycle(1)
+	check(cam.target == main.mercs[1], "E: 다음 쪼꼬미")
+	cam.cycle(-1)
+	check(cam.target == fm, "Q: 이전 쪼꼬미")
+	main.toggle_hud()
+	check(not cam.info_panel.is_visible_in_tree() and cam.is_following(), "Tab: HUD를 숨겨도 따라가기 유지")
+	main.toggle_hud()
+	check(cam.info_panel.is_visible_in_tree(), "Tab 다시 → 정보 패널 보임")
+	cam._process(1.0 / 60.0)
+	check(cam.info_label.text.begins_with(fm.merc_name) and cam.info_label.text.contains("상태:"), "정보 패널: %s" % cam.info_label.text.replace("
+", " / "))
+	# 성 위기 화살표: 영주관이 화면 밖 + 성 위기
+	cam.set_zoom_level(3)
+	fm.position = Vector2(30, 330)
+	cam.snap()
+	dep.last_hall_hit = main.elapsed
+	dep.update_crisis()
+	check(cam.hall_alert(), "영주관이 화면 밖이고 성 위기면 화살표")
+	dep.last_hall_hit = -999.0
+	dep.update_crisis()
+	main.is_night = false
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	cam._unhandled_input(esc)
+	check(not cam.is_following() and cam.zoom == Vector2.ONE and main.world_to_screen(Vector2(10, 10)).is_equal_approx(Vector2(10, 10)), "Esc: 해제하면 원래 화면")
+
 	print("RESULT %s (%d failures)" % ["PASS" if failures == 0 else "FAIL", failures])
 	quit(0 if failures == 0 else 1)
 	return true
