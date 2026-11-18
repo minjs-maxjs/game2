@@ -19,7 +19,7 @@
 
 | 입력 | 동작 |
 |---|---|
-| 좌클릭 (용병) | 정보 보기 |
+| 좌클릭 (쪼꼬미) | 육성 창: 훈련 지원 · 휴가 · 전직 · 방출 |
 | 오른쪽 메뉴 | 용병 모집 · 집결 지점 · 집결 해제 · 방책 수리 · 훈련장 강화 · 배속 |
 | 우클릭 | 집결 지점 지정 취소 |
 | SPACE | 배속 전환 |
@@ -35,15 +35,23 @@ godot --headless --path . --fixed-fps 60 --script res://tests/smoke_test.gd
 
 `RESULT PASS`와 종료 코드 0이면 정상이다.
 
+육성 시스템(등급 분포, 레벨업, 전직, 방출, 소환수) 테스트:
+
+```
+godot --headless --path . --script res://tests/growth_test.gd
+```
+
 ## 구조
 
 ```
 project.godot
 scenes/main.tscn       메인 씬 (노드는 스크립트에서 생성)
 scripts/main.gd        자원 · 낮/밤 · 웨이브 · HUD · 맵 그리기
-scripts/mercenary.gd   자유 의지 용병 (유틸리티 AI + 성격 기반 전투)
+scripts/mercenary.gd   쪼꼬미 (탄생 · 성장 · 전직, 유틸리티 AI 생활, 직업별 전투)
 scripts/monster.gd     균열 마물
-docs/기획서_v0.3.md     게임 기획서
+scripts/job_data.gd    직업 · 등급 · 능력치 표 (새 직업은 여기에 추가)
+scripts/summon.gd      소환사의 소환수
+docs/기획서_v0.4.md     게임 기획서
 ```
 
 화면 캡처: `godot --path . --script res://tests/screenshot.gd -- <출력폴더>` (창이 잠깐 뜬다)

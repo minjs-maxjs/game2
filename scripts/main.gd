@@ -5,6 +5,7 @@ extends Node2D
 
 const Mercenary = preload("res://scripts/mercenary.gd")
 const Monster = preload("res://scripts/monster.gd")
+const JobData = preload("res://scripts/job_data.gd")
 const TOWN_TEX := preload("res://assets/kenney_tiny_town/tilemap_packed.png")
 const DUNGEON_TEX := preload("res://assets/kenney_tiny_dungeon/tilemap_packed.png")
 
@@ -15,6 +16,9 @@ const HALL_MAX_HP := 400.0
 const RECRUIT_COST := 60
 const WAGE_PER_MERC := 5
 const MAX_MERCS := 10
+const TRAIN_SUPPORT_COST := 30
+const TRAIN_SUPPORT_XP := 20.0
+const VACATION_COST := 10
 
 const COL_TEXT := Color("f4e6c8")
 const COL_DARK := Color("1e140c")
@@ -53,6 +57,7 @@ var rifts: Array[Vector2] = [Vector2(590, 262), Vector2(500, 50), Vector2(22, 25
 
 var mercs: Array = []
 var monsters: Array = []
+var summons: Array = []
 var log_lines: Array[String] = []
 
 var rng := RandomNumberGenerator.new()
@@ -70,6 +75,12 @@ var log_label: Label
 var banner: Label
 var banner_tween: Tween
 var speed_button: Button
+var growth_panel: Panel
+var growth_text: RichTextLabel
+var promote_button: Button
+var dismiss_button: Button
+var dismiss_armed := false
+var last_growth_text := ""
 
 
 func _ready() -> void:
@@ -82,9 +93,9 @@ func _ready() -> void:
 	add_child(modulate_node)
 	y_sort_enabled = true
 	_build_hud()
-	# 시작 편성은 고정: 전사 2, 궁수 1, 사제 1. 이후 모집은 무작위.
-	for job in [0, 1, 2, 0]:
-		_spawn_merc(job)
+	# 시작 편성은 고정: 기사 · 거너 · 힐러 · 마법사. 이후 모집은 직업도 무작위.
+	for job_id in ["knight", "gunner", "healer", "mage"]:
+		_spawn_merc(job_id)
 	add_log("세계의 끝 영지에 도착했다. 균열의 기운이 짙다.")
 	_show_banner("아그라 전기 — 1일째 아침")
 
@@ -110,6 +121,8 @@ func _start_night() -> void:
 	to_spawn = 3 + day * 2
 	spawn_timer = 1.0
 	_show_banner("%d일째 밤 — 균열이 열린다" % day)
+	for m in mercs:
+		m.on_night_start()
 	add_log("균열에서 마물이 몰려온다! (%d마리)" % to_spawn)
 
 
@@ -139,6 +152,10 @@ func _start_day() -> void:
 		add_log("임금 체불! 용병들의 사기가 떨어졌다.")
 	for m in mercs:
 		m.on_dawn()
+	for sm in summons:
+		if is_instance_valid(sm):
+			sm.queue_free()
+	summons.clear()
 	_show_banner("%d일째 아침" % day)
 
 
@@ -153,7 +170,7 @@ func _update_lighting(delta: float) -> void:
 
 # ------------------------------------------------------------------ 생성/전투
 
-func _spawn_merc(forced_job: int = -1) -> void:
+func _spawn_merc(forced_job: String = "") -> void:
 	var m: Mercenary = Mercenary.new()
 	m.game = self
 	m.position = building_pos("plaza")
@@ -161,11 +178,13 @@ func _spawn_merc(forced_job: int = -1) -> void:
 	var taken: Array[String] = []
 	for other in mercs:
 		taken.append(other.merc_name)
-	m.randomize_identity(rng, forced_job, taken)
+	m.roll_identity(rng, forced_job, taken)
 	if not mercs.is_empty():
 		m.friend = mercs[rng.randi() % mercs.size()]
 	mercs.append(m)
-	add_log("%s(%s · %s) 합류." % [m.merc_name, m.job_name(), m.trait_text()])
+	add_log("[%s] %s(%s) 합류." % [m.grade_info()["name"], m.merc_name, m.title()])
+	if m.grade == JobData.GRADES.size() - 1:
+		_show_banner("레전더리 쪼꼬미 %s 탄생!" % m.merc_name)
 
 
 func _spawn_monster(elite: bool) -> void:
@@ -273,13 +292,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		placing_rally = false
 		add_log("집결 지점 지정. 밤에 이곳을 지킨다.")
 		return
-	selected = null
+	var picked = null
 	var best := 12.0
 	for m in mercs:
 		var d: float = (m.position + Vector2(0, -7)).distance_to(p)
 		if d < best:
 			best = d
-			selected = m
+			picked = m
+	select(picked)
 
 
 func _on_recruit() -> void:
@@ -319,6 +339,187 @@ func _on_upgrade_training() -> void:
 	wood -= 30.0
 	train_bonus += 0.5
 	add_log("훈련장 강화. 훈련 효율 x%.1f" % train_bonus)
+
+
+# ------------------------------------------------------------------ 육성
+
+func select(m) -> void:
+	selected = m
+	dismiss_armed = false
+	last_growth_text = ""
+	if growth_panel:
+		growth_panel.visible = m != null
+
+
+## 금화로 집중 훈련을 지원한다: 즉시 경험치.
+func train_support(m) -> bool:
+	if gold < TRAIN_SUPPORT_COST:
+		add_log("금화가 부족하다.")
+		return false
+	gold -= TRAIN_SUPPORT_COST
+	m.gain_xp(TRAIN_SUPPORT_XP)
+	add_log("%s에게 훈련 지원. 경험치 +%d" % [m.merc_name, int(TRAIN_SUPPORT_XP)])
+	return true
+
+
+## 휴가: 기력 · 사기 회복.
+func vacation(m) -> bool:
+	if gold < VACATION_COST:
+		add_log("금화가 부족하다.")
+		return false
+	gold -= VACATION_COST
+	m.energy = 100.0
+	m.morale = minf(100.0, m.morale + 25.0)
+	add_log("%s에게 휴가를 줬다. 기력·사기 회복." % m.merc_name)
+	return true
+
+
+## 전직: 레벨 조건 + 마물의 잔재 + 금화.
+func try_promote(m) -> bool:
+	var nt: Dictionary = m.next_tier()
+	if nt.is_empty():
+		add_log("%s은(는) 이미 최고 단계다." % m.merc_name)
+		return false
+	if m.level < int(nt["level"]):
+		add_log("전직하려면 Lv.%d이 필요하다." % int(nt["level"]))
+		return false
+	if residue < int(nt["residue"]) or gold < int(nt["gold"]):
+		add_log("전직 비용 부족: 잔재 %d, 금화 %d" % [int(nt["residue"]), int(nt["gold"])])
+		return false
+	residue -= int(nt["residue"])
+	gold -= int(nt["gold"])
+	m.promote()
+	add_log("%s, %s(으)로 전직!" % [m.merc_name, m.title()])
+	_show_banner("%s → %s" % [m.merc_name, m.title()])
+	return true
+
+
+## 방출: 쪼꼬미를 영지에서 내보낸다. 되돌릴 수 없다.
+func dismiss_merc(m) -> void:
+	if not mercs.has(m):
+		return
+	mercs.erase(m)
+	m.clear_summons()
+	for o in mercs:
+		if o.friend == m:
+			o.friend = null
+			o.morale = maxf(0.0, o.morale - 10.0)
+	if selected == m:
+		select(null)
+	add_log("%s을(를) 방출했다." % m.merc_name)
+	m.queue_free()
+
+
+func _on_train_support() -> void:
+	if selected != null and is_instance_valid(selected):
+		train_support(selected)
+
+
+func _on_vacation() -> void:
+	if selected != null and is_instance_valid(selected):
+		vacation(selected)
+
+
+func _on_promote() -> void:
+	if selected != null and is_instance_valid(selected):
+		try_promote(selected)
+
+
+func _on_dismiss() -> void:
+	if selected == null or not is_instance_valid(selected):
+		return
+	if not dismiss_armed:
+		dismiss_armed = true
+		dismiss_button.text = "정말 방출?"
+		return
+	dismiss_merc(selected)
+
+
+func _on_close_panel() -> void:
+	select(null)
+
+
+func _build_growth_panel(root: Control) -> void:
+	growth_panel = Panel.new()
+	growth_panel.position = Vector2(300, 30)
+	growth_panel.size = Vector2(254, 262)
+	growth_panel.visible = false
+	growth_panel.add_theme_stylebox_override("panel", _box(Color("221710"), Color("8a6340"), 1))
+	root.add_child(growth_panel)
+	growth_text = RichTextLabel.new()
+	growth_text.bbcode_enabled = true
+	growth_text.scroll_active = false
+	growth_text.position = Vector2(6, 4)
+	growth_text.size = Vector2(242, 206)
+	growth_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	growth_panel.add_child(growth_text)
+	var grid := GridContainer.new()
+	grid.columns = 3
+	grid.position = Vector2(6, 214)
+	grid.add_theme_constant_override("h_separation", 2)
+	grid.add_theme_constant_override("v_separation", 2)
+	growth_panel.add_child(grid)
+	var buttons: Array[Button] = []
+	buttons.append(_add_button(grid, "훈련 지원 %dG" % TRAIN_SUPPORT_COST, _on_train_support))
+	buttons.append(_add_button(grid, "휴가 %dG" % VACATION_COST, _on_vacation))
+	promote_button = _add_button(grid, "전직", _on_promote)
+	buttons.append(promote_button)
+	dismiss_button = _add_button(grid, "방출", _on_dismiss)
+	buttons.append(dismiss_button)
+	buttons.append(_add_button(grid, "닫기", _on_close_panel))
+	for b in buttons:
+		b.custom_minimum_size = Vector2(79, 20)
+
+
+func _growth_bbcode(m) -> String:
+	var g: Dictionary = m.grade_info()
+	var j: Dictionary = m.job()
+	var gc: String = (g["color"] as Color).to_html(false)
+	var t := "[color=#%s]◆ %s[/color]  %s  Lv.%d\n" % [gc, g["name"], m.merc_name, m.level]
+	t += "%s  [color=#a89878](%s %d단계 · %s)[/color]\n" % [m.title(), j["name"], m.tier + 1, j["role"]]
+	t += "경험치 %d / %d\n" % [int(m.xp), int(m.xp_needed())]
+	var parts: Array[String] = []
+	for sid in JobData.STATS:
+		var v: float = m.stats[sid]
+		var sname: String = JobData.STAT_NAMES[sid]
+		if sid == j["primary"]:
+			parts.append("[color=#ffd84a]%s %d[/color]" % [sname, int(v)])
+		else:
+			parts.append("%s %d" % [sname, int(v)])
+	t += "  ".join(PackedStringArray(parts.slice(0, 3))) + "\n"
+	t += "  ".join(PackedStringArray(parts.slice(3))) + "   [color=#a89878]합계 %d[/color]\n" % int(m.stat_total())
+	t += "체력 %d/%d  공격 %d  방어 %d\n" % [int(m.hp), int(m.max_hp), int(m.atk), int(m.defense)]
+	t += "사거리 %d  공격 간격 %.1f초\n" % [int(m.attack_range), m.attack_interval]
+	t += "[color=#a89878]%s[/color]\n" % j["perk"]
+	t += "성격: %s\n" % m.trait_text()
+	var friend_name := "-"
+	if m.friend != null and is_instance_valid(m.friend):
+		friend_name = m.friend.merc_name
+	t += "기력 %d  허기 %d  사기 %d  친구 %s\n" % [int(m.energy), int(m.hunger), int(m.morale), friend_name]
+	var nt: Dictionary = m.next_tier()
+	if nt.is_empty():
+		t += "[color=#ffd84a]최고 단계에 도달했다[/color]"
+	else:
+		var ready: bool = m.level >= int(nt["level"])
+		t += "[color=#%s]다음 전직: %s\nLv.%d · 잔재 %d · 금화 %d[/color]" % [
+			"7fe07f" if ready else "a89878", nt["name"], int(nt["level"]), int(nt["residue"]), int(nt["gold"])]
+	return t
+
+
+func _update_growth_panel() -> void:
+	if growth_panel == null or not growth_panel.visible:
+		return
+	if selected == null or not is_instance_valid(selected):
+		select(null)
+		return
+	var t := _growth_bbcode(selected)
+	if t != last_growth_text:
+		last_growth_text = t
+		growth_text.text = t
+	var nt: Dictionary = selected.next_tier()
+	promote_button.disabled = nt.is_empty() or selected.level < int(nt["level"])
+	if not dismiss_armed:
+		dismiss_button.text = "방출"
 
 
 func _on_speed() -> void:
@@ -366,6 +567,13 @@ func _make_theme() -> Theme:
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		th.set_color(c, "Button", COL_TEXT)
 	th.set_color("font_color", "Label", COL_TEXT)
+	th.set_stylebox("disabled", "Button", _box(Color("3a3028"), COL_DARK))
+	th.set_color("font_disabled_color", "Button", Color("8a7a68"))
+	th.set_font("normal_font", "RichTextLabel", font_m)
+	th.set_font("bold_font", "RichTextLabel", font_m)
+	th.set_font_size("normal_font_size", "RichTextLabel", 10)
+	th.set_font_size("bold_font_size", "RichTextLabel", 10)
+	th.set_color("default_color", "RichTextLabel", COL_TEXT)
 	th.set_stylebox("panel", "Panel", _box(Color(0.12, 0.08, 0.05, 0.85), COL_DARK))
 	return th
 
@@ -415,6 +623,7 @@ func _build_hud() -> void:
 	_add_button(menu, "방책 수리\n목재 20", _on_repair)
 	_add_button(menu, "훈련장 강화\n목재 30", _on_upgrade_training)
 	speed_button = _add_button(menu, "배속 x1", _on_speed)
+	_build_growth_panel(root)
 
 
 func _make_label(pos: Vector2, sz: Vector2) -> Label:
@@ -459,7 +668,8 @@ func _update_hud() -> void:
 	if selected != null and is_instance_valid(selected):
 		info_label.text = selected.describe()
 	else:
-		info_label.text = "용병을 클릭하면 정보를 볼 수 있다.\nSPACE 배속 · 우클릭 집결 취소"
+		info_label.text = "쪼꼬미를 클릭하면 육성 창이 열린다.\nSPACE 배속 · 우클릭 집결 취소"
+	_update_growth_panel()
 
 
 # ------------------------------------------------------------------ 맵 (정적 부분은 한 장의 이미지로 미리 합성)

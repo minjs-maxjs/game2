@@ -49,11 +49,18 @@ func _process(delta: float) -> void:
 	hit_t = maxf(0.0, hit_t - delta)
 	var target = null
 	var best := 40.0 + body_size
-	for m in game.mercs:
-		if m.downed:
+	var taunted := false
+	for m in game.mercs + game.summons:
+		if not is_instance_valid(m) or m.downed:
 			continue
 		var d: float = position.distance_to(m.position)
-		if d < best:
+		# 2단계 이상 기사의 도발: 반경 50 안이면 기사를 우선 노린다
+		var taunts: bool = "tier" in m and m.tier >= 1 and m.style() == "melee" and d < 50.0
+		if taunts and not taunted:
+			taunted = true
+			best = d
+			target = m
+		elif d < best and (taunts or not taunted):
 			best = d
 			target = m
 	if target != null:

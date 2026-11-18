@@ -18,8 +18,14 @@ func _initialize() -> void:
 
 func _process(_delta: float) -> bool:
 	frames += 1
+	if frames == 2:
+		main._spawn_merc("summoner")
+		main.gold = 120.0
+	if frames == 230:
+		main.select(main.mercs[0])
 	if frames == 240:
 		_save("day.png")
+		main.select(null)
 		main._start_night()
 		Engine.time_scale = 2.0
 	if frames == 420:
