@@ -16,6 +16,8 @@ const FX := {
 	"heal": ["fx_heal", 22, 3, 0.4],
 }
 const BOLT_TIME := 0.16
+## 후퇴한 쪼꼬미는 체력이 이만큼 찰 때까지 여관에 있는다 (기준 넘자마자 뛰쳐나가는 왕복 방지).
+const RETREAT_UNTIL := 0.7
 
 ## 성별마다 이름 목록이 따로 있다. 다 쓰면 겹쳐도 된다.
 const NAMES := {
@@ -61,6 +63,7 @@ var summons: Array = []
 var activity := "대기"
 var action := ""
 var ate := false
+var retreating := false   # 한번 후퇴하면 RETREAT_UNTIL까지 여관에 머문다
 var target_pos := Vector2.ZERO
 var doing_time := 0.0
 var attack_cd := 0.0
@@ -272,7 +275,7 @@ func _choose_action() -> void:
 	var e := energy / 100.0
 	var scores := {
 		"rest": (100.0 - energy) * (1.6 if lazy else 1.0) + (15.0 if lazy else 0.0),
-		"eat": hunger * 1.3 if game.food >= 1.0 else hunger * 0.3,
+		"eat": hunger * 1.3 if game.food >= 1.0 else 0.0,   # 식량이 없으면 식당에 가지 않는다
 		"train": (25.0 + (40.0 if diligent else 0.0)) * e,
 		"work_farm": (30.0 + (25.0 if diligent else 0.0) + (25.0 if game.food < 15.0 else 0.0)) * e,
 		"work_wood": (30.0 + (20.0 if diligent else 0.0) + (20.0 if game.wood < 30.0 else 0.0)) * e,
@@ -326,6 +329,10 @@ func _night(delta: float) -> void:
 	elif has_trait("용맹"):
 		flee_ratio = 0.1
 	if hp < max_hp * flee_ratio:
+		retreating = true
+	elif hp >= max_hp * maxf(RETREAT_UNTIL, flee_ratio):
+		retreating = false
+	if retreating:
 		activity = "후퇴"
 		var safe: Vector2 = game.buildings["inn"]["spot"]
 		if position.distance_to(safe) > 6.0:
@@ -343,7 +350,9 @@ func _night(delta: float) -> void:
 			_move_to(guard + rally_offset, delta)
 		return
 	var tpos: Vector2 = target.position
-	if position.distance_to(tpos) > attack_range:
+	# 큰 마물(엘리트)은 몸이 큰 만큼 조금 떨어져서도 닿는다. 겹치지 않게.
+	var reach := attack_range + maxf(0.0, float(target.body_size) - 6.0)
+	if position.distance_to(tpos) > reach:
 		activity = "돌격"
 		_move_to(tpos, delta)
 	elif attack_cd <= 0.0:
@@ -456,6 +465,7 @@ func gain_xp(amount: float) -> void:
 
 
 func on_dawn() -> void:
+	retreating = false
 	clear_summons()
 	if downed:
 		downed = false

@@ -86,6 +86,7 @@ var last_growth_text := ""
 
 
 func _ready() -> void:
+	Engine.time_scale = 1.0   # 어떤 경로로 다시 불러와도 배속이 남지 않게
 	rng.randomize()
 	font_s = _load_font("res://assets/fonts/Galmuri7.ttf")
 	font_m = _load_font("res://assets/fonts/Galmuri9.ttf")
@@ -289,6 +290,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if mb.button_index != MOUSE_BUTTON_LEFT:
 		return
 	if placing_rally:
+		if p.y < 27.0 or p.y > 294.0 or not Rect2(Vector2.ZERO, WORLD_SIZE).has_point(p) or not is_walkable(p):
+			add_log("그곳에는 집결할 수 없다.")
+			return
 		rally_point = p
 		has_rally = true
 		placing_rally = false
@@ -374,6 +378,12 @@ func vacation(m) -> bool:
 	m.morale = minf(100.0, m.morale + 25.0)
 	add_log("%s에게 휴가를 줬다. 기력·사기 회복." % m.merc_name)
 	return true
+
+
+## 레벨·잔재·금화가 모두 갖춰졌는가 (전직 버튼 활성화에 쓴다).
+func can_promote(m) -> bool:
+	var nt: Dictionary = m.next_tier()
+	return not nt.is_empty() and m.level >= int(nt["level"]) 		and residue >= int(nt["residue"]) and gold >= int(nt["gold"])
 
 
 ## 전직: 레벨 조건 + 마물의 잔재 + 금화.
@@ -502,9 +512,19 @@ func _growth_bbcode(m) -> String:
 	if nt.is_empty():
 		t += "[color=#ffd84a]최고 단계에 도달했다[/color]"
 	else:
-		var ready: bool = m.level >= int(nt["level"])
+		var ready := can_promote(m)
 		t += "[color=#%s]다음 전직: %s\nLv.%d · 잔재 %d · 금화 %d[/color]" % [
 			"7fe07f" if ready else "a89878", nt["name"], int(nt["level"]), int(nt["residue"]), int(nt["gold"])]
+		# 모자란 것만 빨갛게 알려 준다
+		var lack: Array[String] = []
+		if m.level < int(nt["level"]):
+			lack.append("레벨")
+		if residue < int(nt["residue"]):
+			lack.append("잔재 %d 부족" % (int(nt["residue"]) - residue))
+		if gold < int(nt["gold"]):
+			lack.append("금화 %d 부족" % (int(nt["gold"]) - int(gold)))
+		if not lack.is_empty():
+			t += "\n[color=#e07a6a]%s[/color]" % ", ".join(PackedStringArray(lack))
 	return t
 
 
@@ -519,7 +539,7 @@ func _update_growth_panel() -> void:
 		last_growth_text = t
 		growth_text.text = t
 	var nt: Dictionary = selected.next_tier()
-	promote_button.disabled = nt.is_empty() or selected.level < int(nt["level"])
+	promote_button.disabled = nt.is_empty() or not can_promote(selected)
 	if not dismiss_armed:
 		dismiss_button.text = "방출"
 

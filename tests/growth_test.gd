@@ -101,6 +101,60 @@ func _process(_delta: float) -> bool:
 	main._start_day()
 	check(main.summons.is_empty() and sm.summons.is_empty(), "새벽에 소환수 사라짐")
 
+	# 5) 소환수가 마물을 잡으면 경험치는 소환사에게 (크래시 없음)
+	main._start_night()
+	var xp0: float = sm.xp
+	var lv0: int = sm.level
+	var mo = preload("res://scripts/monster.gd").new()
+	mo.game = main
+	mo.hp = 1.0
+	main.add_child(mo)
+	main.monsters.append(mo)
+	mo.take_damage(5.0, main.summons[0])
+	check(sm.xp > xp0 or sm.level > lv0, "소환수 막타 경험치가 소환사에게")
+	main.monsters.clear()
+	main._start_day()
+
+	# 6) 전직 버튼 조건 = 실제 전직 조건
+	var pm = main.mercs[0]
+	pm.gain_xp(2000.0)
+	main.residue = 0
+	check(not main.can_promote(pm), "잔재가 모자라면 전직 버튼 꺼짐")
+	main.residue = 99
+	main.gold = 9999.0
+	check(main.can_promote(pm), "모두 갖추면 전직 버튼 켜짐")
+
+	# 7) 후퇴: 기준을 막 넘었다고 바로 나가지 않는다
+	main.is_night = true
+	var rm = main.mercs[0]
+	rm.hp = rm.max_hp * 0.05
+	rm._night(0.01)
+	check(rm.retreating, "체력이 낮으면 후퇴")
+	rm.hp = rm.max_hp * 0.5
+	rm._night(0.01)
+	check(rm.retreating, "절반 회복으로는 여관에 머문다")
+	rm.hp = rm.max_hp * 0.75
+	rm._night(0.01)
+	check(not rm.retreating, "70% 넘게 회복하면 다시 나간다")
+	main.is_night = false
+
+	# 8) 식량이 없으면 식당에 가지 않는다
+	main.food = 0.0
+	var ate_any := false
+	for i in 200:
+		rm.hunger = 100.0
+		rm._choose_action()
+		if rm.action == "eat":
+			ate_any = true
+	check(not ate_any, "식량 0이면 식사를 고르지 않는다")
+	main.food = 30.0
+
+	# 9) 모든 균열에서 영주관 공격 범위까지 길이 닿는다
+	for r in main.rifts:
+		var pts: PackedVector2Array = main.find_path(r, main.hall_rect.get_center())
+		var end: Vector2 = pts[pts.size() - 1] if pts.size() > 0 else r
+		check(main.hall_rect.grow(10.0 + 6.0 * 0.5).has_point(end), "균열 %s → 영주관 공격 가능 (끝 %s)" % [r, end])
+
 	print("RESULT %s (%d failures)" % ["PASS" if failures == 0 else "FAIL", failures])
 	quit(0 if failures == 0 else 1)
 	return true
