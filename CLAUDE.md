@@ -1,6 +1,8 @@
 # 아그라 전기 — 작업 지침
 
-Godot 4.7 / GDScript 탑다운 픽셀 게임. 기획은 `docs/기획서_v0.4.md`.
+Godot 4.7 / GDScript 탑다운 픽셀 게임. 기획은 `docs/기획서_v0.5.md`.
+**새 세션은 `docs/인수인계.md`부터 읽는다** (진척 현황, 검증, 라이선스, 다음 작업).
+답변은 한국어로. 단계마다 커밋하고 `main`에 push한다 (원격 `minjs-maxjs/game2`).
 
 ## 코드 찾기: 전체를 훑지 말고 지도부터
 
@@ -31,11 +33,12 @@ Super Retro World 팩(`SuperRetroWorld_CharacterPack_Full/`, `exterior-pack-free
 
 graphify에는 GDScript 파서가 없다. `.gd`는 detect 단계에서 자동으로 잡히지 않으므로,
 `/graphify --update` 를 돌릴 때 corpus를 직접 지정해야 한다:
-`scripts/*.gd`, `tests/*.gd`, `README.md`, `docs/기획서_v0.4.md`, `project.godot`, `scenes/main.tscn`
+`scripts/*.gd`, `tests/*.gd`, `README.md`, `docs/*.md`, `project.godot`, `scenes/main.tscn`
 (이미지·라이선스 파일은 제외). `.gd`는 문서로 취급되어 서브에이전트가 읽고, 함수마다 `L<줄>` 위치를 기록한다.
 갱신 후 `python tools/make_codemap.py` 로 CODEMAP.md를 다시 만든다.
 
 줄 번호가 몇 줄 어긋난 정도라면 그래프를 다시 만들지 말고 `Grep`으로 `func 이름`을 찾으면 된다.
+그래프는 자동 갱신되지 않는다. 마지막 갱신 커밋은 `docs/인수인계.md` 6장에 적어 둔다.
 
 ## 검증
 
