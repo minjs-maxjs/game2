@@ -98,7 +98,8 @@ func _process(_delta: float) -> bool:
 	main._start_night()
 	check(main.summons.size() == 1 and sm.summons.size() == 1, "소환사가 밤에 소환수 1마리")
 	main.monsters.clear()
-	main._start_day()
+	main._start_dawn()
+	main.director.continue_day()
 	check(main.summons.is_empty() and sm.summons.is_empty(), "새벽에 소환수 사라짐")
 
 	# 5) 소환수가 마물을 잡으면 경험치는 소환사에게 (크래시 없음)
@@ -113,7 +114,8 @@ func _process(_delta: float) -> bool:
 	mo.take_damage(5.0, main.summons[0])
 	check(sm.xp > xp0 or sm.level > lv0, "소환수 막타 경험치가 소환사에게")
 	main.monsters.clear()
-	main._start_day()
+	main._start_dawn()
+	main.director.continue_day()
 
 	# 6) 전직 버튼 조건 = 실제 전직 조건
 	var pm = main.mercs[0]
@@ -325,6 +327,102 @@ func _process(_delta: float) -> bool:
 		main._update_growth_panel()
 		check(qm.level > lvl0 and not main.stat_panel.flashing().is_empty(), "레벨업 직후 \"+n\" 표시 (%s)" % str(main.stat_panel.flashing()))
 	main.select(null)
+
+	# 17) 휴식 구간: 새벽 정지 · 낮 결정 창 정지 · 파도 분할 · 파도 사이 휴식
+	var WD = preload("res://scripts/wave_director.gd")
+	var dir = main.director
+	check(WD.AUTO_CONTINUE_DAWN == false and dir.auto_continue == false, "기본은 새벽 정산 창에서 기다린다")
+	main.select(null)
+	main.monsters.clear()
+	main.is_night = true
+	main._start_night()
+	main.monsters.clear()
+	var day0: int = main.day
+	main._start_dawn()
+	check(dir.is_dawn and not main.is_night and dir.panel.visible, "새벽 정산 창이 뜬다")
+	Engine.time_scale = 1.0
+	dep._update_slow()
+	check(is_equal_approx(Engine.time_scale, 0.0), "새벽 정산 중 시간 정지 (x%.1f)" % Engine.time_scale)
+	var pt0: float = main.phase_time
+	main._process(5.0)
+	check(is_equal_approx(main.phase_time, pt0) and not main.is_night and main.day == day0, "새벽 중에는 낮 타이머가 흐르지 않는다")
+	dir.panel.start_button.pressed.emit()
+	check(not dir.is_dawn and not dir.panel.visible and main.day == day0 + 1, "낮 시작 버튼 → %d일째 낮" % main.day)
+	dep._update_slow()
+	check(is_equal_approx(Engine.time_scale, 1.0), "낮 시작 후 배속 복구 (x%.1f)" % Engine.time_scale)
+	main._process(1.0)
+	check(main.phase_time > 0.5, "낮 타이머 재개")
+	# 낮 결정 창(육성 창·배치): 여는 동안 정지, 닫으면 고른 배속(x2)으로
+	main._on_speed()
+	main.select(main.mercs[0])
+	dep._update_slow()
+	check(is_equal_approx(Engine.time_scale, 0.0) and is_equal_approx(dep.base_speed(), 2.0), "낮에 육성 창 열면 정지 (돌아갈 배속 x2 유지)")
+	main.select(null)
+	dep._update_slow()
+	check(is_equal_approx(Engine.time_scale, 2.0), "육성 창 닫으면 x2 복구")
+	main._on_speed()
+	Engine.time_scale = 1.0
+	# 파도 분할: 합계 = 그날 밤 총수, 2/3파도 규칙, 배율 1.0인 날은 기존 식(3+날짜×2)과 같음
+	var split_ok := true
+	for d in range(1, 16):
+		var ws: Array = WD.wave_sizes(d)
+		var sum := 0
+		for w in ws:
+			sum += w
+		var tot: int = WD.night_total_for(d)
+		if sum != tot or ws.size() != (2 if tot < 6 else 3) or ws.min() < 1:
+			split_ok = false
+		if is_equal_approx(WD.NIGHT_MULT[d % 3], 1.0) and sum != 3 + d * 2:
+			split_ok = false
+	check(split_ok, "파도 분할 합계 = 밤 총수 (1~15일, 예: 3일 %s)" % str(WD.wave_sizes(3)))
+	check(WD.night_total_for(4) == roundi((3 + 4 * 2) * 0.8), "쉬운 밤은 x0.8 (4일 %d마리)" % WD.night_total_for(4))
+	# 파도 사이 휴식: 마물이 나오지 않고, 쪼꼬미는 회복하며, 후퇴 중이면 기준을 넘으면 복귀
+	main.day = 3
+	main._start_night()
+	main.monsters.clear()
+	var elite_seen := false
+	var spawned := 0
+	var wm = main.mercs[0]
+	for wave in dir.waves.size():
+		for i in 600:
+			var before: int = main.monsters.size()
+			dir.update_night(1.0 / 60.0)
+			if main.monsters.size() > before:
+				spawned += 1
+				if main.monsters.back().elite:
+					elite_seen = dir.is_last_wave() and dir.to_spawn == 0
+			if dir.to_spawn == 0:
+				break
+		for wmo in main.monsters:
+			wmo.queue_free()
+		main.monsters.clear()
+		if wave == dir.waves.size() - 1:
+			break
+		dir.update_night(1.0 / 60.0)
+		check(dir.resting, "%d파도 뒤 휴식 시작" % (wave + 1))
+		wm.downed = false
+		wm.hp = wm.max_hp * 0.2
+		wm.retreating = true
+		var hp0: float = wm.hp
+		var leak := 0
+		for i in int((WD.WAVE_REST - 0.5) * 60.0):
+			dir.update_night(1.0 / 60.0)
+			leak += main.monsters.size()
+		check(leak == 0 and dir.resting, "휴식 %.0f초 동안 마물 없음" % WD.WAVE_REST)
+		check(wm.hp > hp0 + wm.max_hp * 0.2, "휴식 중 체력 회복 (%.0f → %.0f)" % [hp0, wm.hp])
+		wm.hp = wm.max_hp * 0.75
+		wm._night(1.0 / 60.0)
+		check(not wm.retreating, "후퇴 중 쪼꼬미가 기준을 넘으면 복귀")
+		for i in 60:
+			dir.update_night(1.0 / 60.0)
+		check(not dir.resting and dir.wave_idx == wave + 1, "휴식이 끝나면 %d파도" % (wave + 2))
+	check(spawned == dir.night_total and elite_seen, "모든 파도 합계 %d마리 소환, 엘리트는 마지막 파도 끝" % spawned)
+	var wi: Dictionary = dir.wave_info()
+	check(wi["remaining"] == 0 and wi["wave"] == wi["waves"], "wave_info: 마지막 파도 · 남은 0")
+	dir.update_night(1.0 / 60.0)
+	check(dir.is_dawn, "마지막 파도를 막으면 새벽")
+	dir.continue_day()
+	main.is_night = false
 
 	print("RESULT %s (%d failures)" % ["PASS" if failures == 0 else "FAIL", failures])
 	quit(0 if failures == 0 else 1)

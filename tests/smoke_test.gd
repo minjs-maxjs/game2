@@ -23,6 +23,8 @@ func _initialize() -> void:
 
 func _process(_delta: float) -> bool:
 	frames += 1
+	if frames == 1:
+		main.director.auto_continue = true   # 새벽 정산 창에서 멈추지 않게 (_ready 뒤라야 director가 있다)
 	if main.is_night:
 		saw_night = true
 	# 영주 흉내: 낮에 금화가 남으면 모집, 목재가 남으면 수리, 자동 배치

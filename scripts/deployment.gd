@@ -1,6 +1,7 @@
 extends Node2D
 ## 쪼꼬미별 배치: 쪼꼬미마다 지킬 칸(post_pos)을 정하고, 밤에는 그 칸에서 leash 안만 싸운다.
-## - 낮·밤 언제든 배치할 수 있다. 밤에 쪼꼬미를 고르고 있는 동안은 시간이 NIGHT_EDIT_SPEED로 느려진다.
+## - 낮·밤 언제든 배치할 수 있다. 밤에 쪼꼬미를 고르고 있는 동안은 시간이 NIGHT_EDIT_SPEED로 느려지고,
+##   낮(육성 창·배치)과 새벽 정산 중에는 멈춘다 (speed_override).
 ## - 성 위기(영주관 가까이 마물, 또는 최근 피격)에는 배치를 잠시 떠나 영주관을 지킨다.
 ## - 수동 배치: 쪼꼬미를 고른 뒤 맵을 클릭 → 그 칸(16px 격자)에 배치. 같은 쪼꼬미를 다시 클릭하면 해제.
 ## - 자동 배치: 균열 → 영주관 길 위에 전열(근접) · 중열(소환) · 후열(원거리·광역·치유)로 고르게 나눈다.
@@ -94,12 +95,26 @@ func is_slowed() -> bool:
 	return _saved_speed >= 0.0
 
 
+## 지금 덮어쓸 배속 (-1 = 사용자 배속 그대로).
+## 새벽 정산·낮의 육성 창/배치 → 0(정지), 밤에 배치용으로 쪼꼬미를 고른 동안 → NIGHT_EDIT_SPEED.
+## 따라가기 카메라는 game.selected를 쓰지 않으므로 여기에 걸리지 않는다.
+func speed_override() -> float:
+	if game.game_over:
+		return -1.0
+	if game.director != null and game.director.wants_pause():
+		return 0.0
+	if game.is_night and game.selected != null and is_instance_valid(game.selected):
+		return NIGHT_EDIT_SPEED
+	return -1.0
+
+
 func _update_slow() -> void:
-	var want: bool = game.is_night and not game.game_over and game.selected != null and is_instance_valid(game.selected)
-	if want and _saved_speed < 0.0:
-		_saved_speed = Engine.time_scale
-		Engine.time_scale = NIGHT_EDIT_SPEED
-	elif not want and _saved_speed >= 0.0:
+	var want := speed_override()
+	if want >= 0.0:
+		if _saved_speed < 0.0:
+			_saved_speed = Engine.time_scale
+		Engine.time_scale = want
+	elif _saved_speed >= 0.0:
 		Engine.time_scale = _saved_speed
 		_saved_speed = -1.0
 

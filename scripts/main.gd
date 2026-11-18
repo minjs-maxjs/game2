@@ -9,12 +9,13 @@ const JobData = preload("res://scripts/job_data.gd")
 const MapArt = preload("res://scripts/map_art.gd")
 const Deployment = preload("res://scripts/deployment.gd")
 const StatPanel = preload("res://scripts/stat_panel.gd")
+const WaveDirector = preload("res://scripts/wave_director.gd")
 const TOWN_TEX := preload("res://assets/kenney_tiny_town/tilemap_packed.png")
 const DUNGEON_TEX := preload("res://assets/kenney_tiny_dungeon/tilemap_packed.png")
 
 const WORLD_SIZE := Vector2(640, 360)
 const TILE := 16
-const DAY_LENGTH := 45.0
+const DAY_LENGTH := WaveDirector.DAY_LENGTH
 const HALL_MAX_HP := 400.0
 const RECRUIT_COST := 60
 const WAGE_PER_MERC := 5
@@ -33,14 +34,13 @@ var residue: int = 0
 var day: int = 1
 var is_night := false
 var phase_time := 0.0
-var to_spawn := 0
-var spawn_timer := 0.0
 var game_over := false
 var hall_hp: float = HALL_MAX_HP
 var train_bonus: float = 1.0
 var elapsed := 0.0
 
 var deployment: Deployment
+var director: WaveDirector   # 밤 파도 · 휴식 · 새벽 정산
 var selected = null
 
 ## pos: 건물 중심, spot: 용병이 모이는 자리, spread: 모이는 범위, label: 이름표 위치
@@ -102,7 +102,10 @@ func _ready() -> void:
 	deployment = Deployment.new()
 	deployment.game = self
 	add_child(deployment)
+	director = WaveDirector.new()
+	add_child(director)
 	_build_hud()
+	director.setup(self)
 	# 시작 편성은 고정: 기사 · 거너 · 힐러 · 마법사. 이후 모집은 직업도 무작위.
 	for job_id in ["knight", "gunner", "healer", "mage"]:
 		_spawn_merc(job_id)
@@ -113,11 +116,13 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	elapsed += delta
 	if not game_over:
-		phase_time += delta
 		if is_night:
-			_update_night(delta)
-		elif phase_time >= DAY_LENGTH:
-			_start_night()
+			phase_time += delta
+			director.update_night(delta)
+		elif not director.is_dawn:
+			phase_time += delta
+			if phase_time >= DAY_LENGTH:
+				_start_night()
 	_update_lighting(delta)
 	_update_hud()
 	queue_redraw()
@@ -128,34 +133,25 @@ func _process(delta: float) -> void:
 func _start_night() -> void:
 	is_night = true
 	phase_time = 0.0
-	to_spawn = 3 + day * 2
-	spawn_timer = 1.0
+	director.start_night()
 	_show_banner("%d일째 밤 — 균열이 열린다" % day)
 	for m in mercs:
 		m.on_night_start()
-	add_log("균열에서 마물이 몰려온다! (%d마리)" % to_spawn)
+	add_log("균열에서 마물이 몰려온다! (%d마리 · %d파도)" % [director.night_total, director.waves.size()])
 
 
-func _update_night(delta: float) -> void:
-	spawn_timer -= delta
-	if to_spawn > 0 and spawn_timer <= 0.0:
-		spawn_timer = maxf(0.6, 2.0 - day * 0.15)
-		to_spawn -= 1
-		var elite := day % 3 == 0 and to_spawn == 0
-		_spawn_monster(elite)
-	if to_spawn <= 0 and monsters.is_empty():
-		_start_day()
-
-
-func _start_day() -> void:
+## 마지막 파도를 막으면: 임금·부활·소환수 정리 후 새벽 정산 창 (시간 정지).
+func _start_dawn() -> void:
 	is_night = false
 	phase_time = 0.0
-	day += 1
+	director.enter_dawn()
 	var wage := mercs.size() * WAGE_PER_MERC
 	if gold >= wage:
 		gold -= wage
 		add_log("새벽이 왔다. 임금 %d 금화 지급." % wage)
+		director.report["wage"] = wage
 	else:
+		director.report["wage_paid"] = false
 		gold = 0.0
 		for m in mercs:
 			m.morale = maxf(0.0, m.morale - 25.0)
@@ -166,6 +162,13 @@ func _start_day() -> void:
 		if is_instance_valid(sm):
 			sm.queue_free()
 	summons.clear()
+	director.show_dawn()
+
+
+## 새벽 정산 창에서 "낮 시작"을 누르면 다음 낮이 온다.
+func _begin_day() -> void:
+	day += 1
+	phase_time = 0.0
 	_show_banner("%d일째 아침" % day)
 
 
@@ -173,6 +176,8 @@ func _update_lighting(delta: float) -> void:
 	var target := Color(1, 1, 1)
 	if is_night:
 		target = Color(0.45, 0.42, 0.72)
+	elif director.is_dawn:
+		target = Color(0.95, 0.82, 0.86)
 	elif phase_time > DAY_LENGTH - 8.0:
 		target = Color(1.0, 0.8, 0.68)
 	modulate_node.color = modulate_node.color.lerp(target, clampf(delta * 1.5, 0.0, 1.0))
@@ -212,6 +217,7 @@ func _spawn_monster(elite: bool) -> void:
 func on_monster_killed(mo) -> void:
 	monsters.erase(mo)
 	gold += mo.reward
+	director.on_kill(mo)
 	if mo.elite:
 		residue += 3
 		add_log("엘리트 마물 처치! 마물의 잔재 +3")
@@ -286,7 +292,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			Engine.time_scale = 1.0
 			get_tree().reload_current_scene()
 		elif key.keycode == KEY_SPACE:
-			_on_speed()
+			if director.is_dawn:
+				director.continue_day()
+			else:
+				_on_speed()
 		elif key.keycode == KEY_TAB:
 			toggle_hud()
 		return
@@ -706,6 +715,7 @@ func _show_banner(text: String, sticky: bool = false) -> void:
 	if sticky:
 		return
 	banner_tween = create_tween()
+	banner_tween.set_ignore_time_scale(true)   # 시간이 멈춰도 배너는 사라진다
 	banner_tween.tween_interval(1.8)
 	banner_tween.tween_property(banner, "modulate:a", 0.0, 1.2)
 
@@ -713,7 +723,9 @@ func _show_banner(text: String, sticky: bool = false) -> void:
 func _update_hud() -> void:
 	var phase := ""
 	if is_night:
-		phase = "밤 · 남은 마물 %d" % (to_spawn + monsters.size())
+		phase = "밤 · 남은 마물 %d" % director.wave_info()["remaining"]
+	elif director.is_dawn:
+		phase = "새벽 · 정산 중"
 	else:
 		phase = "낮 · 밤까지 %d초" % maxi(0, int(DAY_LENGTH - phase_time))
 	hud_label.text = "%d일째  %s        영주관 %d/%d    용병 %d/%d" % [
