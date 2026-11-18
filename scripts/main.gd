@@ -446,7 +446,7 @@ func _build_growth_panel(root: Control) -> void:
 	growth_panel.position = Vector2(300, 30)
 	growth_panel.size = Vector2(254, 262)
 	growth_panel.visible = false
-	growth_panel.add_theme_stylebox_override("panel", _box(Color("221710"), Color("8a6340"), 1))
+	growth_panel.add_theme_stylebox_override("panel", _frame("ui_panel", 6, Vector2(6, 6)))
 	root.add_child(growth_panel)
 	growth_text = RichTextLabel.new()
 	growth_text.bbcode_enabled = true
@@ -548,13 +548,16 @@ func _load_font(path: String) -> FontFile:
 	return f
 
 
-func _box(bg: Color, border: Color, width: int = 1) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = bg
-	s.border_color = border
-	s.set_border_width_all(width)
-	s.set_content_margin_all(3)
-	s.anti_aliasing = false
+## 자체 그림 테두리(assets/agra/ui_*.png)를 9칸으로 늘려 쓰는 스타일. tint로 눌림·비활성 표현.
+func _frame(name: String, margin: int, content: Vector2, tint := Color.WHITE) -> StyleBoxTexture:
+	var s := StyleBoxTexture.new()
+	s.texture = MapArt.own_tex(name)
+	s.set_texture_margin_all(margin)
+	s.content_margin_left = content.x
+	s.content_margin_right = content.x
+	s.content_margin_top = content.y
+	s.content_margin_bottom = content.y
+	s.modulate_color = tint
 	return s
 
 
@@ -562,21 +565,22 @@ func _make_theme() -> Theme:
 	var th := Theme.new()
 	th.default_font = font_m
 	th.default_font_size = 10
-	th.set_stylebox("normal", "Button", _box(Color("6b4a2f"), COL_DARK))
-	th.set_stylebox("hover", "Button", _box(Color("8a6340"), COL_DARK))
-	th.set_stylebox("pressed", "Button", _box(Color("4a3220"), COL_DARK))
+	var pad := Vector2(5, 3)
+	th.set_stylebox("normal", "Button", _frame("ui_button", 5, pad))
+	th.set_stylebox("hover", "Button", _frame("ui_button", 5, pad, Color(1.25, 1.18, 1.1)))
+	th.set_stylebox("pressed", "Button", _frame("ui_button", 5, pad, Color(0.72, 0.66, 0.62)))
 	th.set_stylebox("focus", "Button", StyleBoxEmpty.new())
 	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		th.set_color(c, "Button", COL_TEXT)
 	th.set_color("font_color", "Label", COL_TEXT)
-	th.set_stylebox("disabled", "Button", _box(Color("3a3028"), COL_DARK))
+	th.set_stylebox("disabled", "Button", _frame("ui_button", 5, pad, Color(0.5, 0.5, 0.5)))
 	th.set_color("font_disabled_color", "Button", Color("8a7a68"))
 	th.set_font("normal_font", "RichTextLabel", font_m)
 	th.set_font("bold_font", "RichTextLabel", font_m)
 	th.set_font_size("normal_font_size", "RichTextLabel", 10)
 	th.set_font_size("bold_font_size", "RichTextLabel", 10)
 	th.set_color("default_color", "RichTextLabel", COL_TEXT)
-	th.set_stylebox("panel", "Panel", _box(Color(0.12, 0.08, 0.05, 0.85), COL_DARK))
+	th.set_stylebox("panel", "Panel", _frame("ui_panel", 6, Vector2(6, 6), Color(1, 1, 1, 0.95)))
 	return th
 
 
