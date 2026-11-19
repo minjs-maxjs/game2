@@ -24,6 +24,7 @@ var hp := 30.0
 var atk := 6.0
 var speed := 22.0
 var elite := false
+var is_boss := false   # 보스 날의 엘리트. TODO: 오메가 보스 본체 (지금은 플래그만, 능력치는 엘리트와 같다)
 var reward := 8
 var body_size := 6.0
 var kind := "slime"

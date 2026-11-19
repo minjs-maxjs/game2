@@ -557,6 +557,90 @@ func _process(_delta: float) -> bool:
 	cam._unhandled_input(esc)
 	check(not cam.is_following() and cam.zoom == Vector2.ONE and main.world_to_screen(Vector2(10, 10)).is_equal_approx(Vector2(10, 10)), "Esc: 해제하면 원래 화면")
 
+	# 21) 턴 선택: 디펜스/오펜스 · 오펜스 날 자동 방어 · 보스 날 디펜스 강제 · 침식 게이지
+	var TWD = preload("res://scripts/wave_director.gd")
+	var td = main.director
+	var ts = td.turn_select
+	main.select(null)
+	main.monsters.clear()
+	while main.mercs.size() < 6:
+		main._spawn_merc()
+	for tm in main.mercs:
+		tm.downed = false
+		tm.hp = tm.max_hp
+	main.hall_hp = main.HALL_MAX_HP
+	td.erosion = 0
+	main.day = 6                       # 다음 날 7일차: 보스 아님
+	main._start_night()
+	main.monsters.clear()
+	main._start_dawn()
+	check(td.is_dawn and ts.visible and ts.choice_panel.visible and not ts.offense_button.disabled and not td.panel.start_button.visible,
+		"새벽: 턴 선택 창 (7일차 오펜스 가능, 정산 창 '낮 시작'은 [디펜스]가 대신)")
+	ts.offense_button.pressed.emit()
+	check(ts.party_panel.visible and ts.checks.size() == main.mercs.size(), "오펜스 → 파티 체크 목록 (%d명)" % ts.checks.size())
+	for i in 5:
+		ts.checks[i].button_pressed = true
+	check(ts.selected_party().size() == TWD.EXPEDITION_PARTY_MAX and not ts.checks[4].button_pressed and ts.checks[5].disabled,
+		"파티는 최대 %d명 (넘는 체크는 되돌리고 나머지는 잠김)" % TWD.EXPEDITION_PARTY_MAX)
+	var exp_party: Array = ts.selected_party()
+	var gold_before: float = main.gold
+	var res_before: int = main.residue
+	ts.go_button.pressed.emit()
+	check(main.day == 7 and td.offense_today and not td.is_dawn and not ts.visible and td.erosion == 1,
+		"출발 → 7일차 낮 (오펜스, 침식 %d)" % td.erosion)
+	check(exp_party.all(func(pm2): return pm2.away and not pm2.visible) and main.merc_at(exp_party[0].position + Vector2(0, -9)) != exp_party[0],
+		"원정 파티는 마을에 없다 (숨김 · 클릭 안 됨)")
+	var home_power: float = td.home_power()
+	var threat: float = td.offense_threat(7)
+	main.wave_hud.refresh()
+	check(main.wave_hud.detail_label.text.begins_with("원정 중") and main.wave_hud.erosion_label.text == "침식 1/%d" % TWD.EROSION_MAX,
+		"HUD: %s · %s" % [main.wave_hud.detail_label.text, main.wave_hud.erosion_label.text])
+	var hall_before: float = main.hall_hp
+	main.phase_time = main.DAY_LENGTH
+	main._process(0.016)                 # 해질녘 → 자동 방어 → 새벽
+	var want_dmg: float = main.HALL_MAX_HP * TWD.OFFENSE_HALL_DMG_SCALE * clampf((threat - home_power) / threat, 0.0, 1.0)
+	check(td.is_dawn and not main.is_night and main.monsters.is_empty() and td.report.get("offense", false),
+		"오펜스 날 밤: 전투 없이 바로 새벽")
+	check(is_equal_approx(hall_before - main.hall_hp, want_dmg),
+		"자동 방어: 전투력 %d / 위협 %d → 영주관 -%.1f" % [int(home_power), int(threat), hall_before - main.hall_hp])
+	var ex: Dictionary = td.report.get("expedition", {})
+	check(int(ex.get("gold", 0)) == TWD.EXP_GOLD_BASE + TWD.EXP_GOLD_PER_MEMBER * 4 and main.residue == res_before + TWD.EXP_RESIDUE_PER_MEMBER * 4,
+		"원정 임시 보상 (금화 +%d, 잔재 +%d)" % [int(ex.get("gold", 0)), main.residue - res_before])
+	check(ts.result_panel.visible and ts.result_label.text.contains("자동 방어") and td.panel.summary_label.text.contains("원정의 날"),
+		"원정 결과(임시) 창 + 정산 요약: %s" % td.panel.summary_label.text.split("\n")[0])
+	check(exp_party.all(func(pm2): return not pm2.away and pm2.visible) and td.erosion == 1, "새벽에 귀환 · 오펜스 날은 침식이 줄지 않음")
+	ts.ok_button.pressed.emit()
+	check(ts.choice_panel.visible and not ts.result_panel.visible, "결과 확인 → 선택 창")
+	ts.defense_button.pressed.emit()
+	check(main.day == 8 and not td.offense_today and not td.is_dawn and not ts.visible, "디펜스 → 8일차 낮 정상 진행")
+	main._process(1.0)
+	check(main.phase_time > 0.5 and not main.is_night, "8일차 낮 타이머 흐름")
+	# 침식 → 다음 디펜스 밤 마물 수
+	main._start_night()
+	check(main.is_night and td.night_total == TWD.night_total_for(8, 1) and TWD.night_total_for(8, 1) == roundi(TWD.base_total(8) * 1.1),
+		"침식 1 → 8일차 밤 마물 %d (기본 %d × 1.1)" % [td.night_total, TWD.night_total_for(8)])
+	main.monsters.clear()
+	main._start_dawn()
+	check(td.erosion == 0, "디펜스를 마치면 침식 -1 (%d)" % td.erosion)
+	# 보스 날: 5·10일차는 디펜스 강제
+	check(TWD.is_boss_day(5) and TWD.is_boss_day(10) and not TWD.is_boss_day(7) and TWD.has_elite(5) and TWD.has_elite(10),
+		"5·10일차 = 보스 날 (엘리트 웨이브)")
+	for bd in [4, 9]:
+		main.day = bd
+		ts.show_choice()
+		check(ts.offense_button.disabled and ts.choice_label.text.contains("보스전") and not td.start_offense([main.mercs[0]]) and main.day == bd,
+			"%d일차: 디펜스 강제 (오펜스 비활성 · 보스전)" % (bd + 1))
+	main.day = 6
+	ts.show_choice()
+	check(not ts.offense_button.disabled, "7일차는 다시 오펜스 가능")
+	td.continue_day()
+	main.day = 10
+	main._spawn_monster(true, TWD.is_boss_day(10))
+	check(main.monsters.back().is_boss and main.monsters.back().elite, "보스 날 엘리트에 is_boss 플래그")
+	for tmo in main.monsters:
+		tmo.queue_free()
+	main.monsters.clear()
+
 	print("RESULT %s (%d failures)" % ["PASS" if failures == 0 else "FAIL", failures])
 	quit(0 if failures == 0 else 1)
 	return true

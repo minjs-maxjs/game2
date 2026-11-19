@@ -51,10 +51,13 @@ func show_report(r: Dictionary) -> void:
 
 
 ## 정산 요약: "N일차 방어 성공 — 처치 20, 금화 +XXX, 쓰러진 미니용사 N명, 영주관 -N" + 임금 줄.
+## 오펜스 날: "N일차 원정의 날 — 마을 자동 방어: …" + 임금 줄.
 static func summary_text(r: Dictionary) -> String:
 	var line := "%d일차 방어 성공 — 처치 %d, 금화 +%d, 쓰러진 미니용사 %d명, 영주관 -%d" % [
 		int(r.get("day", 0)), int(r.get("kills", 0)), int(r.get("gold", 0)),
 		int(r.get("fallen", 0)), int(r.get("hall_loss", 0))]
+	if r.get("offense", false):
+		line = "%d일차 원정의 날 — %s" % [int(r.get("day", 0)), str(r.get("expedition", {}).get("line", ""))]
 	if r.get("wage_paid", true):
 		return line + "\n임금 %d 금화 지급." % int(r.get("wage", 0))
 	return line + "\n임금 체불! 사기가 떨어졌다."

@@ -60,6 +60,7 @@ var morale := 70.0
 var level := 1
 var xp := 0.0
 var downed := false
+var away := false      # 원정 중: 마을에 없다 (숨김 · 처리 정지 · 클릭/전투 제외)
 var summons: Array = []
 
 var activity := "대기"

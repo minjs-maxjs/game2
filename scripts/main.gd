@@ -138,6 +138,9 @@ func _process(delta: float) -> void:
 # ------------------------------------------------------------------ 낮/밤
 
 func _start_night() -> void:
+	if director.offense_today:
+		director.resolve_offense_night()   # 오펜스 날: 전투 장면 없이 결과 한 줄 → 새벽
+		return
 	is_night = true
 	phase_time = 0.0
 	director.start_night()
@@ -209,7 +212,8 @@ func _spawn_merc(forced_job: String = "") -> void:
 		_show_banner("레전더리 미니용사 %s 탄생!" % m.merc_name)
 
 
-func _spawn_monster(elite: bool) -> void:
+## boss: 보스 날의 마지막 엘리트. TODO: 오메가 보스 본체로 교체 (지금은 is_boss 플래그만).
+func _spawn_monster(elite: bool, boss: bool = false) -> void:
 	var mo: Monster = Monster.new()
 	mo.game = self
 	var ri := rng.randi() % rifts.size()
@@ -217,9 +221,12 @@ func _spawn_monster(elite: bool) -> void:
 	mo.set_meta("rift", ri)
 	mo.position = r + Vector2(rng.randf_range(-8, 8), rng.randf_range(-8, 8))
 	mo.setup(day, elite, rng)
+	mo.is_boss = boss
 	add_child(mo)
 	monsters.append(mo)
-	if elite:
+	if boss:
+		add_log("보스 마물이 나타났다!")
+	elif elite:
 		add_log("엘리트 마물이 나타났다!")
 
 
@@ -337,6 +344,8 @@ func merc_at(p: Vector2):
 	var picked = null
 	var best := 12.0
 	for m in mercs:
+		if m.away:
+			continue
 		var d: float = (m.position + Vector2(0, -9)).distance_to(p)
 		if d < best:
 			best = d
@@ -432,6 +441,23 @@ func try_promote(m) -> bool:
 	add_log("%s, %s(으)로 전직!" % [m.merc_name, m.title()])
 	_show_banner("%s → %s" % [m.merc_name, m.title()])
 	return true
+
+
+## 원정 출발: 그날 낮·밤 마을에 없다 (숨김 · 처리 정지 · 클릭·전투력 합산 제외).
+func send_away(m) -> void:
+	m.away = true
+	m.visible = false
+	m.process_mode = Node.PROCESS_MODE_DISABLED
+	if selected == m:
+		select(null)
+
+
+## 원정 귀환: 광장으로 돌아온다.
+func return_home(m) -> void:
+	m.away = false
+	m.visible = true
+	m.process_mode = Node.PROCESS_MODE_INHERIT
+	m.position = building_pos("plaza")
 
 
 ## 방출: 미니용사를 영지에서 내보낸다. 되돌릴 수 없다.

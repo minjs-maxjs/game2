@@ -17,11 +17,15 @@ const COL_DAY_BAR := Color("e8c547")
 const COL_NIGHT_BAR := Color("e05a4a")
 const COL_REST_BAR := Color("5ad05a")
 const COL_ELITE := Color("ff5a4a")
+const COL_EROSION := Color("c08cff")
+const EROSION_W := 90.0
+const EROSION_FONT := 8
 
 var game
 var banner: Panel
 var title_label: Label
 var detail_label: Label
+var erosion_label: Label
 var bar: StatBar
 var intro: Label
 var intro_elite: Label
@@ -43,6 +47,13 @@ func setup(g) -> void:
 	add_child(banner)
 	title_label = _label(banner, Vector2(7, 3), Vector2(80, 12), HORIZONTAL_ALIGNMENT_LEFT)
 	detail_label = _label(banner, Vector2(84, 3), Vector2(BANNER_SIZE.x - 91, 12), HORIZONTAL_ALIGNMENT_RIGHT)
+	# 침식 게이지: 배너 오른쪽 아래 바깥에 작게
+	erosion_label = _label(banner, Vector2(BANNER_SIZE.x - EROSION_W - 4, BANNER_SIZE.y), Vector2(EROSION_W, 10), HORIZONTAL_ALIGNMENT_RIGHT)
+	erosion_label.add_theme_font_override("font", g.font_s)
+	erosion_label.add_theme_font_size_override("font_size", EROSION_FONT)
+	erosion_label.add_theme_constant_override("outline_size", 3)
+	erosion_label.add_theme_color_override("font_outline_color", g.COL_DARK)
+	erosion_label.add_theme_color_override("font_color", COL_EROSION)
 	bar = StatBar.new()
 	bar.position = Vector2(8, 18)
 	bar.size = Vector2(BANNER_SIZE.x - 16, 3)
@@ -91,6 +102,7 @@ func refresh() -> void:
 	banner.visible = not dir.is_dawn and not game.game_over
 	if not banner.visible:
 		return
+	erosion_label.text = "침식 %d/%d" % [dir.erosion, dir.EROSION_MAX]
 	if game.is_night:
 		var wi: Dictionary = dir.wave_info()
 		title_label.text = "%d일차 · 밤" % game.day
@@ -104,7 +116,10 @@ func refresh() -> void:
 	else:
 		var pv: Dictionary = dir.night_preview()
 		title_label.text = "%d일차 · 낮" % game.day
-		detail_label.text = "오늘 밤: 마물 %d마리%s" % [pv["total"], " (엘리트 1)" if pv["elite"] else ""]
+		if pv["offense"]:
+			detail_label.text = "원정 중 · 오늘 밤: 자동 방어 (마물 %d)" % pv["total"]
+		else:
+			detail_label.text = "오늘 밤: 마물 %d마리%s" % [pv["total"], " (보스전)" if pv["boss"] else (" (엘리트 1)" if pv["elite"] else "")]
 		bar.set_bar(1.0 - game.phase_time / game.DAY_LENGTH, COL_DAY_BAR)
 
 
@@ -112,7 +127,7 @@ func refresh() -> void:
 func night_intro() -> void:
 	var wi: Dictionary = game.director.wave_info()
 	intro.text = "%d일차 밤 — 마물 %d마리" % [game.day, wi["total"]]
-	intro_elite.text = "엘리트 출현!" if wi["elite"] else ""
+	intro_elite.text = "보스전!" if wi["boss"] else ("엘리트 출현!" if wi["elite"] else "")
 	if intro_tween and intro_tween.is_valid():
 		intro_tween.kill()
 	intro.modulate.a = 1.0
